@@ -198,11 +198,13 @@ class SyntheticGenerator:
 
     def _comm_anomaly(self) -> list[SourceRecord]:
         recs = self._base_records()
+        # A tight burst of short rapid calls (within 2 minutes) — a realistic
+        # communication burst signal.
         for i in range(5):
             recs.append(
                 self._record(
                     CDR,
-                    self._ts(13, 0, i * 10),
+                    self._ts(13, 0, i * 2),
                     f"Short rapid call {N_1}->{N_2} at night.",
                     {"caller_phone": N_1, "receiver_phone": N_2, "duration": 2},
                 )

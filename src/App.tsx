@@ -7,27 +7,36 @@ import { Layout } from "./components/Layout";
 import { LoginScreen } from "./pages/Login";
 import { CommandCenter } from "./pages/CommandCenter";
 import { Investigation } from "./pages/Investigation";
+import { CaseIntakePage } from "./pages/CaseIntakePage";
 import { NetworkIntel } from "./pages/NetworkIntel";
 import { EntityExplorer } from "./pages/EntityExplorer";
 import { TimelinePage } from "./pages/TimelinePage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { LocationsPage } from "./pages/LocationsPage";
+import { AssistantPage } from "./pages/AssistantPage";
+import { SimulationPage } from "./pages/SimulationPage";
+import { AuditPage } from "./pages/AuditPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const pages: Record<Exclude<Section, "login">, React.JSX.Element> = {
   "command-center": <CommandCenter />,
   investigations: <Investigation />,
+  "case-intake": <CaseIntakePage />,
   network: <NetworkIntel />,
   entities: <EntityExplorer />,
   timeline: <TimelinePage />,
-  locations: <PlaceholderPage title="LOCATION INTELLIGENCE" subtitle="Stylized mock map, activity clusters, and movement paths." />,
+  locations: <LocationsPage />,
   transactions: <PlaceholderPage title="TRANSACTION ANALYSIS" subtitle="Mock financial flows, suspicious transfers, and volume charts." />,
   communications: <PlaceholderPage title="COMMUNICATION ANALYSIS" subtitle="Call and message cluster relationships with temporal patterns." />,
   alerts: <AlertsPage />,
   reports: <ReportsPage />,
-  settings: <SettingsPage />
+  settings: <SettingsPage />,
+  assistant: <AssistantPage />,
+  simulation: <SimulationPage />,
+  audit: <AuditPage />
 };
 
 export function App() {

@@ -2,6 +2,7 @@ export type Section =
   | "login"
   | "command-center"
   | "investigations"
+  | "case-intake"
   | "network"
   | "entities"
   | "timeline"
@@ -10,7 +11,10 @@ export type Section =
   | "communications"
   | "alerts"
   | "reports"
-  | "settings";
+  | "settings"
+  | "assistant"
+  | "simulation"
+  | "audit";
 
 export type EntityType = "Person" | "Organization" | "Vehicle" | "Phone" | "Location" | "Account";
 

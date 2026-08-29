@@ -1,10 +1,11 @@
 import { useAppStore } from "../store";
 import { Section } from "../types";
-import { Bell, Building2, FileText, MapPinned, MessagesSquare, Radar, Settings, Shield, TimerReset, Users, ArrowLeftRight } from "lucide-react";
+import { Bell, Building2, FileText, MapPinned, MessagesSquare, Radar, Settings, Shield, TimerReset, Users, ArrowLeftRight, MessageCircle, Play, History, Upload } from "lucide-react";
 
 const items: { id: Exclude<Section, "login">; label: string; icon: React.ReactNode }[] = [
   { id: "command-center", label: "Command", icon: <Shield size={14} /> },
   { id: "investigations", label: "Cases", icon: <Radar size={14} /> },
+  { id: "case-intake", label: "Intake", icon: <Upload size={14} /> },
   { id: "network", label: "Network", icon: <Users size={14} /> },
   { id: "entities", label: "Entities", icon: <Building2 size={14} /> },
   { id: "timeline", label: "Timeline", icon: <TimerReset size={14} /> },
@@ -13,7 +14,10 @@ const items: { id: Exclude<Section, "login">; label: string; icon: React.ReactNo
   { id: "communications", label: "Comms", icon: <MessagesSquare size={14} /> },
   { id: "alerts", label: "Alerts", icon: <Bell size={14} /> },
   { id: "reports", label: "Reports", icon: <FileText size={14} /> },
-  { id: "settings", label: "Settings", icon: <Settings size={14} /> }
+  { id: "settings", label: "Settings", icon: <Settings size={14} /> },
+  { id: "assistant", label: "Assistant", icon: <MessageCircle size={14} /> },
+  { id: "simulation", label: "Simulation", icon: <Play size={14} /> },
+  { id: "audit", label: "Audit", icon: <History size={14} /> }
 ];
 
 export function TopNav() {

@@ -2,6 +2,7 @@ import { dashboardMetrics, feed, entities, alerts } from "../data/mock";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, Radar, Shield, Users, Globe, Layers3, ChevronRight, Play, Pin, ArrowUpRight, Waves } from "lucide-react";
 import { HoloList, HudCard, StatRow } from "../components/HudPrimitives";
+import { GlobeScene } from "../components/GlobeScene";
 
 const activity = [22, 34, 31, 46, 58, 49, 63, 77, 69, 84, 91, 88];
 const entityMix = [
@@ -38,6 +39,9 @@ export function CommandCenter() {
   useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 2500); return () => clearInterval(t); }, []);
   return (
     <div className="page command-center">
+      <div className="app-background-globe" aria-hidden="true">
+        <GlobeScene />
+      </div>
       <div className="command-title-row">
         <div className="command-topline">
           <span>Project</span>

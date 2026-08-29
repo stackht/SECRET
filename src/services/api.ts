@@ -210,3 +210,116 @@ export async function apiListCases(params: {
   const qs = search.toString();
   return request<CaseList>(`/api/v1/cases${qs ? `?${qs}` : ""}`);
 }
+
+export interface CaseCreateInput {
+  title: string;
+  case_number?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+}
+
+export async function apiCreateCase(input: CaseCreateInput): Promise<CaseRead> {
+  return request<CaseRead>("/api/v1/cases", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// --- Analysis: temporal + location (Phase 9) --------------------------------
+
+export interface TimeWindowResult {
+  window_start: string;
+  count: number;
+  sources: string[];
+}
+export interface EventItem {
+  record_id: string;
+  timestamp: string;
+  source: string;
+  summary: string;
+  location?: string | null;
+}
+export interface LocationActivityEntry {
+  location: string;
+  events: number;
+  level: string;
+}
+export interface TemporalLocationResponse {
+  windows: TimeWindowResult[];
+  event_sequence: EventItem[];
+  communication_bursts: { window_start: string; count: number }[];
+  location_activity: LocationActivityEntry[];
+  movement: EventItem[];
+}
+
+export async function apiTemporalLocation(params: { scenario?: string; entity_id?: string } = {}): Promise<TemporalLocationResponse> {
+  const search = new URLSearchParams();
+  if (params.scenario) search.append("scenario", params.scenario);
+  if (params.entity_id) search.append("entity_id", params.entity_id);
+  const qs = search.toString();
+  return request<TemporalLocationResponse>(`/api/v1/analysis/temporal-location${qs ? `?${qs}` : ""}`);
+}
+
+// --- Investigation engine workflow (Phase 10) -------------------------------
+
+export async function apiRunInvestigation(scenario = "NORMAL_NETWORK"): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/v1/analysis/investigation?scenario=${encodeURIComponent(scenario)}`, {
+    method: "POST",
+  });
+}
+
+// --- AI Assistant (Phase 11) ------------------------------------------------
+
+export interface AssistantResponse {
+  question: string;
+  answer: string;
+  source_ids: string[];
+  found: boolean;
+}
+
+export async function apiAskAssistant(question: string): Promise<AssistantResponse> {
+  return request<AssistantResponse>("/api/v1/analysis/assistant", {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
+}
+
+// --- Audit (Phase 13) -------------------------------------------------------
+
+export interface AuditEntry {
+  id: number;
+  user_id?: number | null;
+  action: string;
+  object_type?: string | null;
+  object_id?: string | null;
+  result: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function apiListAudit(limit = 50): Promise<AuditEntry[]> {
+  return request<AuditEntry[]>(`/api/v1/audit?limit=${limit}`);
+}
+
+// --- Simulation / Demo mode (Phase 15) --------------------------------------
+
+export interface SimulationStep {
+  label: string;
+  count: number;
+  sample: string;
+}
+export interface SimulationResponse {
+  scenario: string;
+  steps: SimulationStep[];
+  entities: number;
+  relationships: number;
+  nodes_written: number;
+  insights: Record<string, unknown>;
+  elapsed_seconds: number;
+}
+
+export async function apiRunSimulation(scenario = "NORMAL_NETWORK"): Promise<SimulationResponse> {
+  return request<SimulationResponse>(`/api/v1/analysis/simulation?scenario=${encodeURIComponent(scenario)}`, {
+    method: "POST",
+  });
+}
