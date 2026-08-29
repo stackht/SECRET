@@ -1,9 +1,58 @@
+import { useMemo } from "react";
 import { HudPage } from "../components/HudPage";
 import { HudCard, HoloList } from "../components/HudPrimitives";
+import { useBackendStore } from "../store/backend";
 
+/**
+ * Network Intelligence (Phase 7).
+ *
+ * Visually unchanged. The Key Influencers / Hot nodes lists are now derived from
+ * the live knowledge-graph (or the synthetic fallback) instead of hard-coded
+ * values, so the screen reflects real application state.
+ */
 export function NetworkIntel() {
+  const graph = useBackendStore((s) => s.graph);
+  const mode = useBackendStore((s) => s.mode);
+
+  // Rank nodes by risk to approximate influencer importance.
+  const influencers = useMemo(() => {
+    const scored = graph.nodes.map((node) => ({
+      node,
+      risk: (node.properties.risk as number) ?? (node.properties.risk_score as number) ?? 0,
+    }));
+    scored.sort((a, b) => b.risk - a.risk);
+    return scored.slice(0, 4);
+  }, [graph]);
+
+  // Hot nodes: entities with the most connections.
+  const hot = useMemo(() => {
+    const degree: Record<string, number> = {};
+    for (const edge of graph.edges) {
+      degree[edge.source] = (degree[edge.source] ?? 0) + 1;
+      degree[edge.target] = (degree[edge.target] ?? 0) + 1;
+    }
+    const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+    const ranked = graph.nodes
+      .map((node) => ({ node, degree: degree[node.id] ?? 0 }))
+      .filter((x) => x.degree > 0)
+      .sort((a, b) => b.degree - a.degree)
+      .slice(0, 4);
+    return ranked;
+  }, [graph]);
+
+  const online = mode === "backend";
+
   return (
-    <HudPage title="NETWORK INTELLIGENCE" subtitle="High-density relationship analysis" rightMeta={<><div>GRAPH ONLINE</div><div>7 ACTIVE CLUSTERS</div></>}>
+    <HudPage
+      title="NETWORK INTELLIGENCE"
+      subtitle="High-density relationship analysis"
+      rightMeta={
+        <>
+          <div>{online ? "GRAPH ONLINE" : "SYNTHETIC MODE"}</div>
+          <div>{graph.nodes.length} NODES · {graph.edges.length} LINKS</div>
+        </>
+      }
+    >
       <div className="hud-network-layout">
         <HudCard label="Filters" title="Signal Controls" className="hud-network-controls">
           <div className="filters hud-filters">
@@ -26,20 +75,31 @@ export function NetworkIntel() {
         <HudCard label="Graph surface" title="Network Mesh" className="hud-network-mesh">
           <div className="hud-surface-grid hud-surface-grid-nodes" />
           <div className="hud-network-overlay">
-            <div className="glass-strip">42 clusters mapped</div>
-            <div className="glass-strip">16 active paths</div>
+            <div className="glass-strip">{graph.nodes.length} clusters mapped</div>
+            <div className="glass-strip">{graph.edges.length} active paths</div>
           </div>
         </HudCard>
 
         <div className="hud-network-side">
           <HudCard label="Entity details" title="Key Influencers">
-            <HoloList items={[{ label: "Entity A", value: "94.8" }, { label: "Entity B", value: "89.2" }, { label: "Entity C", value: "81.7" }, { label: "Entity D", value: "76.2" }]} />
+            <HoloList
+              items={influencers.map((entry, i) => ({
+                label: `${String(i + 1).padStart(2, "0")}  ${entry.node.name}`,
+                value: entry.risk.toFixed(1),
+              }))}
+            />
           </HudCard>
           <HudCard label="Pulse map" title="Hot nodes">
             <div className="mini-list">
-              <div className="entity entity-tight"><div><div>North Cluster</div><div className="meta">18 links · 92 confidence</div></div><div className="risk">92</div></div>
-              <div className="entity entity-tight"><div><div>Delta Relay</div><div className="meta">12 links · 84 confidence</div></div><div className="risk">84</div></div>
-              <div className="entity entity-tight"><div><div>Sector 17</div><div className="meta">24 links · 97 confidence</div></div><div className="risk">97</div></div>
+              {hot.map((entry) => (
+                <div key={entry.node.id} className="entity entity-tight">
+                  <div>
+                    <div>{entry.node.name}</div>
+                    <div className="meta">{entry.node.type} · {entry.degree} links</div>
+                  </div>
+                  <div className="risk">{entry.degree}</div>
+                </div>
+              ))}
             </div>
           </HudCard>
         </div>

@@ -1,0 +1,88 @@
+version: "3.9"
+
+services:
+  ############################################################
+  # PostgreSQL — relational source of truth
+  ############################################################
+  postgres:
+    image: postgres:16-alpine
+    container_name: secret_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: secret
+      POSTGRES_USER: secret
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secret -d secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  ############################################################
+  # Neo4j — derived analytical graph
+  # Applies cypher/schema.cypher via cypher-shell after startup.
+  ############################################################
+  neo4j:
+    image: neo4j:5-community
+    container_name: secret_neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/secret
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4jdata:/data
+      - ./cypher/schema.cypher:/cypher/schema.cypher:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    command:
+      - bash
+      - -c
+      - |
+        /startup/docker-entrypoint.sh neo4j &
+        until wget -qO- http://localhost:7474/ >/dev/null 2>&1; do sleep 2; done;
+        cypher-shell -u neo4j -p secret -f /cypher/schema.cypher || true
+        wait
+
+  ############################################################
+  # SECRET API — FastAPI backend
+  # Applies migrations, then serves the API on :8000.
+  ############################################################
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: secret_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://secret:secret@postgres:5432/secret
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: secret
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      SECRET_ENV: production
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:8000"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    command: >
+      sh -c "python run.py --no-migrate --port 8000"
+
+volumes:
+  pgdata:
+  neo4jdata:

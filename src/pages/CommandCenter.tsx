@@ -1,6 +1,5 @@
 import { dashboardMetrics, feed, entities, alerts } from "../data/mock";
 import { useEffect, useMemo, useState } from "react";
-import { GlobeScene } from "../components/GlobeScene";
 import { Activity, BarChart3, Radar, Shield, Users, Globe, Layers3, ChevronRight, Play, Pin, ArrowUpRight, Waves } from "lucide-react";
 import { HoloList, HudCard, StatRow } from "../components/HudPrimitives";
 
@@ -39,15 +38,19 @@ export function CommandCenter() {
   useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 2500); return () => clearInterval(t); }, []);
   return (
     <div className="page command-center">
-      <div className="command-header">
-        <div>
-          <div className="brand-lock">SECRET</div>
+      <div className="command-title-row">
+        <div className="command-topline">
+          <span>Project</span>
+          <span className="command-year">2020</span>
+        </div>
+        <div className="command-hero">
+          <div className="brand-lock">DATA VISUALIZATION</div>
           <div className="subtle">Smart Entity &amp; Criminal Relationship Exploration Tool</div>
         </div>
-        <div className="system-meta">
-          <div> SYSTEM ONLINE </div>
-          <div> 27 AUG 2026 </div>
-          <div> {`21:${String((tick % 60) + 10).padStart(2, "0")}:14`} </div>
+        <div className="system-meta command-clock">
+          <div>SYSTEM ONLINE</div>
+          <div>27 AUG 2026</div>
+          <div>{`21:${String((tick % 60) + 10).padStart(2, "0")}:14`}</div>
         </div>
       </div>
       <div className="hud-grid">
@@ -94,20 +97,11 @@ export function CommandCenter() {
           <div className="hud-center-top">
             <div className="hud-title-bar">DATA STATISTICS PLATFORM</div>
           </div>
-          <HudCard label="Core sphere" className="hud-globe-frame">
-            <div className="hud-globe-wrap">
-              <GlobeScene />
-              <div className="hud-target-pill">
-                <span>SECTOR 17</span>
-                <strong>12,024,010</strong>
-              </div>
-            </div>
-            <div className="hud-globe-footer">
-              <div className="glass-strip"><Pin size={12} /> Global mesh locked</div>
-              <div className="glass-strip"><Waves size={12} /> Signal sweep active</div>
-              <div className="glass-strip"><ArrowUpRight size={12} /> 87.4% confidence</div>
-            </div>
-          </HudCard>
+          <div className="hud-globe-anchors">
+            <div className="glass-strip"><Pin size={12} /> Global mesh locked</div>
+            <div className="glass-strip"><Waves size={12} /> Signal sweep active</div>
+            <div className="glass-strip"><ArrowUpRight size={12} /> 87.4% confidence</div>
+          </div>
         </section>
 
         <section className="hud-col">

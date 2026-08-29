@@ -1,0 +1,100 @@
+"""pytest configuration for SECRET backend."""
+import os
+
+import pytest
+from fastapi.testclient import TestClient
+
+# Ensure app is importable regardless of CWD.
+os.environ.setdefault("PYTHONPATH", ".")
+
+from app.core.dbcheck import check_database_connection  # noqa: E402
+from app.core.graphcheck import check_graph_connection  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def client() -> TestClient:
+    """Return a TestClient bound to the FastAPI app (lifespan runs).
+
+    Used for non-DB tests (health, bootstrap). The lifespan attempts a best-effort
+    seed against the configured engine but fails silently if the DB is down.
+    """
+    from app.main import create_app
+
+    app = create_app()
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture()
+def db_client() -> TestClient:
+    """Return a TestClient whose DB sessions point at a fresh SQLite database.
+
+    Creates tables (via ORM metadata) and seeds the default admin user, enabling
+    auth and repository tests to run without PostgreSQL/Neo4j/Docker.
+    """
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.database import Base, get_db_session
+    from app.main import create_app
+    from app.services.seed_service import ensure_admin_user
+
+    async def _setup():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        TestSession = async_sessionmaker(engine, expire_on_commit=False)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with TestSession() as session:
+            await ensure_admin_user(session)
+        return engine, TestSession
+
+    engine, test_session = asyncio.run(_setup())
+
+    async def override_session():
+        async with test_session() as session:
+            yield session
+
+    from app.main import app as _app
+
+    _app.dependency_overrides[get_db_session] = override_session
+    with TestClient(_app) as test_client:
+        yield test_client
+    _app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers",
+        "integration: requires external services (PostgreSQL / Neo4j) to be running",
+    )
+
+
+def pytest_collection_modifyitems(session, config, items) -> None:  # type: ignore[no-untyped-def]
+    """Automatically skip integration tests when external services are down.
+
+    Uses a lightweight async connectivity probe so `pytest` remains green even
+    when Docker/PostgreSQL/Neo4j are not running.
+    """
+    import asyncio
+
+    async def _probe() -> tuple[bool, bool]:
+        db_ok = (await check_database_connection()).get("status") == "ok"
+        graph_ok = (await check_graph_connection()).get("status") == "ok"
+        return db_ok, graph_ok
+
+    try:
+        db_ok, graph_ok = asyncio.run(_probe())
+    except Exception:  # noqa: BLE001 - never let probe failure break collection
+        db_ok = graph_ok = False
+
+    for item in items:
+        if "integration" in item.keywords:
+            if not (db_ok and graph_ok):
+                item.add_marker(
+                    pytest.mark.skip(
+                        reason="external services unreachable (PostgreSQL/Neo4j not running)"
+                    )
+                )
