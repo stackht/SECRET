@@ -1,0 +1,7 @@
+transaction_id,sender,receiver,amount,currency,timestamp,description
+TX001,P001,P002,2500,INR,2026-08-18 12:00:00,Synthetic transfer
+TX002,P002,P003,4200,INR,2026-08-19 15:30:00,Synthetic transfer
+TX003,P001,P004,1800,INR,2026-08-20 09:45:00,Synthetic transfer
+TX004,P003,P004,3500,INR,2026-08-21 13:10:00,Synthetic transfer
+TX005,P002,P001,2700,INR,2026-08-22 17:20:00,Synthetic transfer
+TX006,P001,P003,125000,INR,2026-08-24 09:05:00,Synthetic unusually large transfer

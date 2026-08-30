@@ -1,0 +1,13 @@
+SURVEILLANCE REPORT: SURV-2026-001
+CASE: CASE-2026-SECRET-001
+
+Synthetic observation log.
+
+2026-08-20 09:30 — Vehicle MH12AB1001 associated with P001 observed at Riverside Industrial Area.
+2026-08-21 13:00 — P003 observed near Riverside Industrial Area.
+2026-08-22 17:00 — Vehicle MH12CD2002 associated with P002 observed near Warehouse District.
+2026-08-24 08:45 — Vehicle MH12AB1001 associated with P001 observed at Riverside Industrial Area.
+2026-08-24 09:15 — P004 observed at Riverside Industrial Area.
+
+These observations are fictional and intended only for testing SECRET's ingestion,
+entity extraction, relationship extraction, timeline, graph and provenance features.

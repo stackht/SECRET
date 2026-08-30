@@ -1,0 +1,22 @@
+FIR NUMBER: FIR-2026-001
+DATE: 2026-08-18
+CASE: CASE-2026-SECRET-001
+
+This is a fictional synthetic report created exclusively for software testing.
+
+Investigators received information concerning repeated meetings involving Arjun Mehta,
+Rohan Verma and Sameer Khan around the Riverside Industrial Area and Central Market.
+
+Arjun Mehta is associated with Meridian Logistics. Rohan Verma is associated with
+Northstar Traders. Vehicle MH12AB1001 was observed near Riverside Industrial Area.
+Vehicle MH12CD2002 was observed near Central Market.
+
+The report records the following indicators for analytical correlation:
+- repeated communication between Arjun Mehta and Rohan Verma
+- repeated communication between Rohan Verma and Sameer Khan
+- meetings near Riverside Industrial Area
+- financial transfers between entities associated with the above persons
+- an unusual increase in communication activity on 2026-08-24
+
+No person in this synthetic dataset is being asserted to have committed a crime.
+All names, identifiers and events are fictional.

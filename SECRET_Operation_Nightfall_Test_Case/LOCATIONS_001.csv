@@ -1,0 +1,7 @@
+event_id,entity_id,timestamp,latitude,longitude,location_name
+LOC001,P001,2026-08-18 10:00:00,19.0760,72.8777,Warehouse District
+LOC002,P002,2026-08-19 15:00:00,19.0820,72.8820,Central Market
+LOC003,P001,2026-08-20 09:30:00,19.0650,72.8950,Riverside Industrial Area
+LOC004,P003,2026-08-21 13:00:00,19.0700,72.8900,Riverside Industrial Area
+LOC005,P001,2026-08-24 08:45:00,19.0650,72.8950,Riverside Industrial Area
+LOC006,P004,2026-08-24 09:15:00,19.0650,72.8950,Riverside Industrial Area

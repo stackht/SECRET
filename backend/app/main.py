@@ -29,7 +29,10 @@ async def lifespan(_: FastAPI):
         except Exception:  # noqa: BLE001 - never block startup on seed failure
             pass
     yield
-    await engine.dispose()
+    if settings.secret_env.lower() != "test":
+        # Skip disposing the shared engine under tests: TestClient teardown
+        # races with the Windows proactor loop and raises on the disposed pool.
+        await engine.dispose()
     await neo4j_connection.close()
 
 

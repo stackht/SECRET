@@ -1,6 +1,11 @@
 """pytest configuration for SECRET backend."""
 import os
 
+# Test mode: the app-level lifespan skips seeding + engine disposal (avoiding
+# Windows proactor teardown races). Integration markers are always skipped in
+# test mode — unit runs must never depend on live PostgreSQL/Neo4j.
+os.environ.setdefault("SECRET_ENV", "test")
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -77,11 +82,17 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_collection_modifyitems(session, config, items) -> None:  # type: ignore[no-untyped-def]
-    """Automatically skip integration tests when external services are down.
+    """Force-skip integration tests in test mode.
 
-    Uses a lightweight async connectivity probe so `pytest` remains green even
-    when Docker/PostgreSQL/Neo4j are not running.
+    Unit runs are deterministic and must never depend on live PostgreSQL/Neo4j.
+    (Outside test mode we additionally auto-skip them when services are down.)
     """
+    if os.environ.get("SECRET_ENV") == "test":
+        for item in items:
+            if "integration" in item.keywords:
+                item.add_marker(pytest.mark.skip(reason="integration disabled under SECRET_ENV=test"))
+        return
+
     import asyncio
 
     async def _probe() -> tuple[bool, bool]:

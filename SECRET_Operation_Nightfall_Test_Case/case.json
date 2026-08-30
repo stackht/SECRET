@@ -1,0 +1,7 @@
+{
+  "case_id": "CASE-2026-SECRET-001",
+  "title": "Operation Nightfall",
+  "description": "Synthetic end-to-end test case for SECRET intelligence analysis.",
+  "status": "OPEN",
+  "priority": "HIGH"
+}
