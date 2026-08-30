@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.graph.types import GraphEdge, GraphNode
 from app.models.case import Case, CaseCriminal
 from app.models.criminal import CriminalProfile
+from app.models.entity import Entity, EntityRelationship
 
 
 def _profile_to_node(profile: CriminalProfile) -> GraphNode:
@@ -97,6 +98,39 @@ class GraphMaterializer:
                     target_id=f"CS-{case.id:04d}",
                     type="INVOLVED_IN",
                     properties={"role": link.role_in_case or "RELATED", "confidence": 0.95},
+                )
+            )
+            edge_count += 1
+
+        # Extracted entities + relationships (ingested case data) -> graph.
+        entities = list((await self._session.execute(select(Entity))).scalars().all())
+        for entity in entities:
+            await self._store.upsert_node(
+                GraphNode(
+                    id=entity.entity_id,
+                    type=entity.entity_type,
+                    name=entity.name,
+                    properties={
+                        "confidence": entity.confidence,
+                        "source_ids": entity.source_ids,
+                        "attributes": entity.attributes,
+                    },
+                )
+            )
+            node_count += 1
+
+        relationships = list((await self._session.execute(select(EntityRelationship))).scalars().all())
+        for relationship in relationships:
+            await self._store.upsert_edge(
+                GraphEdge(
+                    id="",
+                    source_id=relationship.source_id,
+                    target_id=relationship.target_id,
+                    type=relationship.rel_type,
+                    properties={
+                        "confidence": relationship.confidence,
+                        "source_ids": relationship.source_ids,
+                    },
                 )
             )
             edge_count += 1

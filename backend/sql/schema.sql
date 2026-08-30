@@ -209,3 +209,52 @@ CREATE TRIGGER trg_criminal_profiles_updated BEFORE UPDATE ON criminal_profiles
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_cases_updated BEFORE UPDATE ON cases
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Case data sources (Phase 2-3 source registry) ------------------------------
+CREATE TABLE case_sources (
+    id BIGSERIAL PRIMARY KEY,
+    case_id BIGINT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    source_id VARCHAR(64) NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    file_type VARCHAR(32),
+    source_type VARCHAR(32),
+    status VARCHAR(24) NOT NULL DEFAULT 'UPLOADED',
+    record_count INTEGER,
+    processing_error VARCHAR(512),
+    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    processed_at TIMESTAMPTZ,
+    UNIQUE (case_id, source_id)
+);
+CREATE INDEX idx_case_sources_case ON case_sources (case_id);
+
+-- Canonical entities + relationships (Phase 2 ingestion persistence) ---------
+CREATE TABLE entities (
+    id BIGSERIAL PRIMARY KEY,
+    case_id BIGINT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    entity_id VARCHAR(128) NOT NULL,
+    entity_type VARCHAR(32) NOT NULL,
+    name VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+    confidence FLOAT NOT NULL DEFAULT 0,
+    attributes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    source_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (case_id, entity_id, entity_type)
+);
+CREATE INDEX idx_entities_case ON entities (case_id);
+CREATE INDEX idx_entities_type ON entities (entity_type);
+
+CREATE TABLE entity_relationships (
+    id BIGSERIAL PRIMARY KEY,
+    case_id BIGINT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    rel_type VARCHAR(40) NOT NULL,
+    source_id VARCHAR(128) NOT NULL,
+    target_id VARCHAR(128) NOT NULL,
+    confidence FLOAT NOT NULL DEFAULT 0,
+    source_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    attributes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (case_id, rel_type, source_id, target_id)
+);
+CREATE INDEX idx_entity_relationships_case ON entity_relationships (case_id);
+CREATE INDEX idx_entity_relationships_source ON entity_relationships (source_id);

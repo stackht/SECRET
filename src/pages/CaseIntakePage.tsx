@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HudPage } from "../components/HudPage";
-import { HudCard, HoloList, StatRow } from "../components/HudPrimitives";
+import { HudCard, HoloList } from "../components/HudPrimitives";
+import { useBackendStore } from "../store/backend";
 import {
   apiCreateCase,
+  apiGenerateAlerts,
   apiListCases,
-  apiRunInvestigation,
+  apiMaterializeGraph,
+  apiProcessSource,
+  apiUploadSource,
   type CaseRead,
+  type SourceProcessResult,
+  type SourceUploadResult,
 } from "../services/api";
 import {
   analyzeFile,
@@ -15,12 +21,16 @@ import {
   type FileAnalysis,
   type SourceType,
 } from "../services/intake";
+import { DEMO_FILES } from "../data/demoCorpus";
 
 interface QueueItem {
   id: string;
+  file: File;
   analysis: FileAnalysis | null;
   state: "pending" | "analyzing" | "ready" | "error";
   sourceType: SourceType;
+  uploaded?: SourceUploadResult;
+  processed?: SourceProcessResult;
   error?: string;
 }
 
@@ -35,15 +45,14 @@ const PROCESS_STAGES = [
   "UPLOAD",
   "VALIDATE",
   "PARSE",
-  "NORMALIZE",
-  "ENTITY EXTRACTION",
-  "RELATIONSHIP EXTRACTION",
-  "ENTITY RESOLUTION",
+  "PERSIST",
   "GRAPH UPDATE",
   "ANALYTICS",
 ];
 
 export function CaseIntakePage() {
+  const backend = useBackendStore((s) => s.mode);
+  const refreshGraph = useBackendStore((s) => s.refreshGraph);
   const [cases, setCases] = useState<CaseRead[]>([]);
   const [selectedCase, setSelectedCase] = useState<string>("");
   const [creating, setCreating] = useState(false);
@@ -72,6 +81,7 @@ export function CaseIntakePage() {
     const batchId = nextId.current;
     const items: QueueItem[] = list.map((f) => ({
       id: `Q-${batchId}-${f.name}`,
+      file: f,
       analysis: null,
       state: "pending",
       sourceType: detectSourceType(f.name),
@@ -137,17 +147,59 @@ export function CaseIntakePage() {
     }
     setError(null);
     setProcessing(true);
+    setResults(null);
     setStage(PROCESS_STAGES[0]);
-    // Asynchronous real pipeline — update stage from real responses.
     try {
-      setStage(PROCESS_STAGES[1]);
-      await new Promise((r) => setTimeout(r, 250));
-      setStage(PROCESS_STAGES[4]);
-      const res = await apiRunInvestigation("NORMAL_NETWORK");
-      setStage(PROCESS_STAGES[7]);
-      await new Promise((r) => setTimeout(r, 250));
-      setStage("READY");
-      setResults(res);
+      if (backend === "backend") {
+        // REAL pipeline: upload each ready file, then process each source.
+        const ready = queue.filter((q) => q.analysis && !q.analysis.errors.length);
+        if (!ready.length) {
+          setError("No valid files to process. Fix or remove errored files first.");
+          setProcessing(false);
+          return;
+        }
+        const uploads: SourceUploadResult[] = [];
+        for (const item of ready) {
+          setStage("UPLOAD");
+          const up = await apiUploadSource(selectedCase, item.file, item.sourceType);
+          setQueue((q) => q.map((x) => (x.id === item.id ? { ...x, uploaded: up } : x)));
+          uploads.push(up);
+        }
+        setStage("PERSIST");
+        const processed: SourceProcessResult[] = [];
+        for (const up of uploads) {
+          if (up.status === "ERROR") continue;
+          const res = await apiProcessSource(selectedCase, up.source_id);
+          setQueue((q) => q.map((x) => (x.uploaded?.source_id === up.source_id ? { ...x, processed: res } : x)));
+          processed.push(res);
+        }
+        setStage("GRAPH UPDATE");
+        await apiMaterializeGraph();
+        await refreshGraph();
+        let alertsCreated = 0;
+        try {
+          const res = await apiGenerateAlerts(selectedCase);
+          alertsCreated = res.created;
+        } catch { /* alert generation is best-effort */ }
+        setStage("READY");
+        const entities = processed.reduce((s, r) => s + Number(r.metrics.entities_persisted ?? 0), 0);
+        const relationships = processed.reduce((s, r) => s + Number(r.metrics.relationships_persisted ?? 0), 0);
+        setResults({
+          mode: "live",
+          sources: uploads.length,
+          processed: processed.length,
+          records: processed.reduce((s, r) => s + r.record_count, 0),
+          entities,
+          relationships,
+          alerts_created: alertsCreated,
+          uploads: uploads.map((u) => ({ source_id: u.source_id, filename: u.filename, status: u.status, format: u.format, quality: u.quality, error: u.error })),
+        });
+      } else {
+        // Offline demo mode: local analysis only — never fake a backend write.
+        setStage("");
+        setError("Backend offline. Files are analyzed locally; start the API and re-run to persist them.");
+        setResults(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Processing failed.");
       setStage("");
@@ -157,12 +209,9 @@ export function CaseIntakePage() {
   };
 
   const importDemo = () => {
-    // Synthetic CSV via a real file, pushed through the real analysis pipeline.
-    const csv = "caller,receiver,timestamp,duration\n4821,9044,2026-08-14T09:12,240\n4821,9044,2026-08-14T11:02,180\n7712,9044,2026-08-14T12:45,300\n";
-    const file = new File([csv], "cdr_demo.csv", { type: "text/csv" });
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    addFiles(dt.files);
+    // Real corpus files pushed through the same pipeline (upload -> parse -> process).
+    const files = DEMO_FILES.map((d) => new File([d.content], d.name, { type: d.mime }));
+    addFiles(files);
   };
 
   const quality = useMemo(() => {
@@ -272,7 +321,7 @@ export function CaseIntakePage() {
                       )}
                     </div>
                   </div>
-                  <div className="risk">{item.analysis?.quality != null ? `${item.analysis.quality}%` : "..."}</div>
+                  <div className="risk">{item.processed ? `PROCESSED · ${item.processed.record_count} rec` : item.uploaded ? `${item.uploaded.status} · ${item.uploaded.quality.quality_score ?? 0}%` : item.analysis?.quality != null ? `${item.analysis.quality}%` : "..."}</div>
                   <button className="pill" onClick={() => removeFile(item.id)}>Remove</button>
                 </div>
               ))}
@@ -321,15 +370,26 @@ export function CaseIntakePage() {
         {/* ---- Processing results (real) ---- */}
         {results && (
           <>
-            <HudCard label="Extraction" title="Entity results">
-              <div className="table">
-                <div className="meta">Entities extracted: {String(results.entities)}</div>
-                <div className="meta">Relationships extracted: {String(results.relationships)}</div>
-                <div className="meta">Nodes written to graph: {String(results.nodes_written)}</div>
+            <HudCard label="Ingestion" title="Pipeline result">
+              {results.mode === "live" ? (
+                <HoloList
+                  items={[
+                    { label: "Sources uploaded", value: String(results.sources) },
+                    { label: "Sources processed", value: String(results.processed) },
+                    { label: "Total records", value: Number(results.records).toLocaleString() },
+                    { label: "Entities persisted", value: Number(results.entities).toLocaleString() },
+                    { label: "Relationships persisted", value: Number(results.relationships).toLocaleString() },
+                    { label: "Alert indicators", value: String(results.alerts_created ?? 0) },
+                  ]}
+                />
+              ) : null}
+              <div className="hud-search-hints" style={{ marginTop: 10 }}>
+                {(results.uploads as { source_id: string; filename: string; status: string; quality: { quality_score?: number } }[]).map((u) => (
+                  <span key={u.source_id} className="glass-strip">
+                    {u.filename} → {u.status} · quality {u.quality?.quality_score ?? 0}%
+                  </span>
+                ))}
               </div>
-            </HudCard>
-            <HudCard label="Insights" title="Analytical indicators">
-              <pre style={{ margin: 0 }}><code className="meta">{JSON.stringify(results.insights, null, 2)}</code></pre>
             </HudCard>
           </>
         )}

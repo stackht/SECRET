@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "secret"
+    neo4j_connect_timeout: float = 3.0
 
     # JWT
     jwt_secret: str = "change-me"
@@ -30,6 +31,9 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    # Ingestion
+    max_upload_bytes: int = 50_000_000
 
     # Demo admin seed (dev only; override in production)
     admin_username: str = "admin"

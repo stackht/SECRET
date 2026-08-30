@@ -11,10 +11,12 @@
 export const API_BASE_URL =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
-let accessToken: string | null = null;
+let accessToken: string | null = localStorage.getItem("secret.access_token");
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+  if (token) localStorage.setItem("secret.access_token", token);
+  else localStorage.removeItem("secret.access_token");
 }
 
 export function getAccessToken(): string | null {
@@ -224,6 +226,277 @@ export async function apiCreateCase(input: CaseCreateInput): Promise<CaseRead> {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+// --- Case data sources + ingestion (Phase 15 intake) -------------------------
+
+export interface SourceRead {
+  id: number;
+  source_id: string;
+  filename: string;
+  file_type?: string | null;
+  source_type?: string | null;
+  status: string;
+  record_count?: number | null;
+  processing_error?: string | null;
+  metadata_json: Record<string, unknown>;
+  uploaded_at: string;
+  processed_at?: string | null;
+}
+
+export interface SourceUploadResult {
+  source_id: string;
+  filename: string;
+  case_id: number;
+  format: string;
+  status: string;
+  record_count: number;
+  quality: Record<string, unknown>;
+  error: string | null;
+}
+
+export interface SourceProcessResult {
+  source_id: string;
+  filename: string;
+  case_id: number;
+  status: string;
+  record_count: number;
+  metrics: Record<string, unknown>;
+}
+
+export async function apiListSources(caseKey: string): Promise<SourceRead[]> {
+  return request<SourceRead[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/sources`);
+}
+
+export async function apiUploadSource(
+  caseKey: string,
+  file: File,
+  sourceType: string,
+): Promise<SourceUploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("source_type", sourceType);
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/cases/${encodeURIComponent(caseKey)}/sources/upload`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, `Backend unreachable at ${API_BASE_URL}`);
+  }
+  if (!response.ok) {
+    let detail = `Upload failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    } catch { /* ignore */ }
+    throw new ApiError(response.status, detail);
+  }
+  return (await response.json()) as SourceUploadResult;
+}
+
+export async function apiProcessSource(caseKey: string, sourceId: string): Promise<SourceProcessResult> {
+  return request<SourceProcessResult>(
+    `/api/v1/cases/${encodeURIComponent(caseKey)}/sources/${encodeURIComponent(sourceId)}/process`,
+    { method: "POST" },
+  );
+}
+
+export async function apiDeleteSource(caseKey: string, sourceId: string): Promise<void> {
+  return request<void>(`/api/v1/cases/${encodeURIComponent(caseKey)}/sources/${encodeURIComponent(sourceId)}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Persisted case entities + relationships (ingestion read-back) -----------
+
+export interface EntityRead {
+  entity_id: string;
+  entity_type: string;
+  name: string;
+  confidence: number;
+  attributes: Record<string, unknown>;
+  source_ids: string[];
+  created_at: string;
+}
+
+export interface RelationshipRead {
+  rel_type: string;
+  source_id: string;
+  target_id: string;
+  confidence: number;
+  source_ids: string[];
+  attributes: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function apiListCaseEntities(caseKey: string): Promise<EntityRead[]> {
+  return request<EntityRead[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/entities`);
+}
+
+export async function apiListCaseRelationships(caseKey: string): Promise<RelationshipRead[]> {
+  return request<RelationshipRead[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/relationships`);
+}
+
+export async function apiMaterializeGraph(): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("/api/v1/graph/materialize", { method: "POST" });
+}
+
+// --- Per-case analysis (comms / transactions / timeline / locations) ---------
+
+export interface CommsResponse {
+  total_communications: number;
+  top_contacts: { entity_id: string; count: number }[];
+  flows: { source: string; target: string; count: number }[];
+  bursts: { entity_id: string; window: string; count: number }[];
+}
+
+export interface TransResponse {
+  total_transactions: number;
+  total_amount: number;
+  flows: { source: string; target: string; count: number; total_amount: number }[];
+  top_senders: { account_id: string; total_amount: number; count: number }[];
+}
+
+export interface TimelineEvent {
+  timestamp: string;
+  record_id: string;
+  source_id: string;
+  summary: string;
+  location: string | null;
+}
+
+export interface LocationsResponse {
+  locations: { name: string; observations: number }[];
+  visits: { location: string; entity_id: string; latitude?: string; longitude?: string; observations: number }[];
+}
+
+export async function apiCaseCommunications(caseKey: string): Promise<CommsResponse> {
+  return request<CommsResponse>(`/api/v1/cases/${encodeURIComponent(caseKey)}/communications`);
+}
+
+export async function apiCaseTransactions(caseKey: string): Promise<TransResponse> {
+  return request<TransResponse>(`/api/v1/cases/${encodeURIComponent(caseKey)}/transactions`);
+}
+
+export async function apiCaseTimeline(caseKey: string): Promise<TimelineEvent[]> {
+  return request<TimelineEvent[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/timeline`);
+}
+
+export async function apiCaseLocations(caseKey: string): Promise<LocationsResponse> {
+  return request<LocationsResponse>(`/api/v1/cases/${encodeURIComponent(caseKey)}/locations`);
+}
+
+// --- Alerts (Phase 18) -------------------------------------------------------
+
+export interface AlertRead {
+  id: number;
+  case_id: number | null;
+  profile_id: number | null;
+  severity: string;
+  status: string;
+  title: string;
+  description: string | null;
+  score: number;
+  confidence: number;
+  source_ids: string[];
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export async function apiCaseAlerts(caseKey: string): Promise<AlertRead[]> {
+  return request<AlertRead[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/alerts`);
+}
+
+export async function apiGenerateAlerts(caseKey: string): Promise<{ created: number; alerts: AlertRead[] }> {
+  return request<{ created: number; alerts: AlertRead[] }>(
+    `/api/v1/cases/${encodeURIComponent(caseKey)}/alerts/generate`,
+    { method: "POST" },
+  );
+}
+
+export async function apiUpdateAlert(caseKey: string, alertId: number, status: string): Promise<AlertRead> {
+  return request<AlertRead>(`/api/v1/cases/${encodeURIComponent(caseKey)}/alerts/${alertId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+// --- Reports (Phase 9) -------------------------------------------------------
+
+export interface ReportResponse {
+  id: string;
+  report_type: string;
+  title: string;
+  generated_at: string;
+  generated_by: string;
+  sections: { heading: string; body: string[] }[];
+  artifact: string;
+  artifact_mime: string;
+}
+
+export interface ReportMeta {
+  id: string;
+  report_type: string;
+  title: string;
+  generated_at: string;
+  generated_by: string;
+  sections: number;
+}
+
+export async function apiGenerateReport(payload: {
+  report_type: string;
+  case_number?: string;
+  entity_id?: string;
+  title?: string;
+}): Promise<ReportResponse> {
+  return request<ReportResponse>("/api/v1/reports/generate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiListReports(): Promise<ReportMeta[]> {
+  return request<ReportMeta[]>("/api/v1/reports");
+}
+
+export async function apiGetReport(reportId: string): Promise<ReportResponse> {
+  return request<ReportResponse>(`/api/v1/reports/${encodeURIComponent(reportId)}`);
+}
+
+export function downloadReport(report: ReportResponse): void {
+  const bytes = Uint8Array.from(atob(report.artifact), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: report.artifact_mime || "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${report.title || "report"}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+// --- Dashboard (Command Center) ----------------------------------------------
+
+export interface DashboardSummary {
+  cases: number;
+  criminals: number;
+  entities: number;
+  relationships: number;
+  sources: number;
+  alerts: number;
+  anomaly_signals: number;
+  priority_distribution: Record<string, number>;
+}
+
+export async function apiDashboardSummary(): Promise<DashboardSummary> {
+  return request<DashboardSummary>("/api/v1/dashboard/summary");
 }
 
 // --- Analysis: temporal + location (Phase 9) --------------------------------

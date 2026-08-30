@@ -37,6 +37,8 @@ class RelationshipMention:
     target_id: str
     rel_type: str
     confidence: float
+    timestamp: str = ""
+    attributes: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -72,7 +74,7 @@ def extract(record: SourceRecord) -> ExtractionResult:
         if isinstance(value, (list,)):
             continue
         entity_id = str(value)
-        name = default_name if key != "person" else f"Person {entity_id}"
+        name = default_name if key == "person" else entity_id
         result.entities.append(
             EntityMention(entity_id=entity_id, entity_type=etype, name=name, confidence=0.9)
         )
@@ -86,12 +88,15 @@ def extract(record: SourceRecord) -> ExtractionResult:
             b_value = fields.get(b_field)
             if b_value is None:
                 continue
+            attrs = {k: fields[k] for k in ("amount", "duration") if fields.get(k)}
             result.relationships.append(
                 RelationshipMention(
                     source_id=str(a_value),
                     target_id=str(b_value),
                     rel_type=rel_type,
                     confidence=0.85,
+                    timestamp=record.timestamp,
+                    attributes=attrs,
                 )
             )
 

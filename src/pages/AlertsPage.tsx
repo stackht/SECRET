@@ -1,29 +1,100 @@
-import { useAppStore } from "../store";
-import { alerts } from "../data/mock";
+import { useCallback, useEffect, useState } from "react";
 import { HudPage } from "../components/HudPage";
 import { HudCard } from "../components/HudPrimitives";
+import { apiCaseAlerts, apiGenerateAlerts, apiUpdateAlert, type AlertRead } from "../services/api";
+import { useCaseSelection } from "../services/useCaseSelection";
+
+const FILTERS = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 
 export function AlertsPage() {
-  const { alertFilter, setAlertFilter } = useAppStore();
-  const list = alerts.filter((a) => alertFilter === "ALL" || a.severity === alertFilter);
+  const { backend, cases, caseKey, setCaseKey } = useCaseSelection();
+  const [alerts, setAlerts] = useState<AlertRead[]>([]);
+  const [filter, setFilter] = useState<string>("ALL");
+  const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const load = useCallback(async (key: string) => {
+    try {
+      setAlerts(await apiCaseAlerts(key));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load alerts");
+    }
+  }, []);
+
+  const runGenerate = async () => {
+    if (!caseKey) return;
+    setGenerating(true);
+    try {
+      const res = await apiGenerateAlerts(caseKey);
+      await load(caseKey);
+      if (res.created === 0) setError("No new indicators above threshold (deduplicated).");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const transition = async (alert: AlertRead, status: string) => {
+    await apiUpdateAlert(caseKey, alert.id, status);
+    await load(caseKey);
+  };
+
+  useEffect(() => {
+    if (backend === "backend" && caseKey) void load(caseKey);
+    else if (backend !== "backend") setAlerts([]);
+  }, [backend, caseKey, load]);
+
+  const list = alerts.filter((a) => filter === "ALL" || a.severity === filter);
+
   return (
-    <HudPage title="ALERT CENTER" subtitle="Professional alert management" rightMeta={<><div>{list.length} SIGNALS</div></>}>
+    <HudPage
+      title="ALERT CENTER"
+      subtitle={backend === "backend" ? "Indicator alerts computed from persisted analytics" : "Offline demo"}
+      rightMeta={<><div>{list.length} SIGNALS</div>{backend === "backend" ? <div>LIVE</div> : <div>DEMO</div>}</>}
+    >
       <div className="hud-alert-layout">
-        <HudCard label="Alert queue" title="Severity Filter" className="hud-alert-filter">
-          <div className="filters hud-filters">{["ALL","CRITICAL","HIGH","MEDIUM","LOW"].map((f) => <button key={f} className="pill" onClick={() => setAlertFilter(f as any)}>{f}</button>)}</div>
+        <HudCard label="Alert queue" title={backend === "backend" ? "Severity Filter" : "Synthetic mode"} className="hud-alert-filter">
+          <div className="filters hud-filters">
+            {FILTERS.map((f) => <button key={f} className="pill" onClick={() => setFilter(f)}>{f}</button>)}
+          </div>
           <div className="hud-alert-ring" />
+          {backend === "backend" && (
+            <>
+              <select className="control hud-search" value={caseKey} onChange={(e) => { setCaseKey(e.target.value); void load(e.target.value); }}>
+                {cases.map((c) => <option key={c.case_number} value={c.case_number}>{c.case_number} · {c.title}</option>)}
+              </select>
+              <button className="cta" onClick={runGenerate} disabled={generating || !caseKey} style={{ marginTop: 8 }}>
+                {generating ? "SCANNING..." : "GENERATE ALERT INDICATORS"}
+              </button>
+            </>
+          )}
         </HudCard>
         <HudCard label="Alert stream" title="Incoming Signals" className="hud-alert-stream">
           <div className="stack">
-            {list.map((a) => (
-              <div key={a.title} className={`alert ${a.severity.toLowerCase()}`}>
-                <div>
-                  <div className="tag">{a.severity}</div>
-                  <div>{a.title}</div>
+            {backend !== "backend" ? (
+              <div className="meta">Start the backend and run intake to compute real indicator alerts.</div>
+            ) : list.length ? (
+              list.map((a) => (
+                <div key={a.id} className={`alert ${a.severity.toLowerCase()}`}>
+                  <div>
+                    <div className="tag">{a.severity} · {a.status} · score {a.score}</div>
+                    <div>{a.title}</div>
+                    {a.description && <div className="meta">{a.description}</div>}
+                    <div className="meta">Sources: {a.source_ids.join(", ") || "—"} · confidence {a.confidence}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {a.status === "NEW" && <button className="pill" onClick={() => void transition(a, "REVIEWING")}>REVIEW</button>}
+                    {a.status !== "DISMISSED" && <button className="pill" onClick={() => void transition(a, "DISMISSED")}>DISMISS</button>}
+                    {a.status !== "RESOLVED" && <button className="pill" onClick={() => void transition(a, "RESOLVED")}>RESOLVE</button>}
+                  </div>
                 </div>
-                <div className="meta">{a.time}</div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <div className="meta">No indicator alerts yet — generate after ingesting data.</div>
+            )}
+            {error && <div className="meta" style={{ color: "var(--red, #ff5f56)" }}>{error}</div>}
           </div>
         </HudCard>
       </div>

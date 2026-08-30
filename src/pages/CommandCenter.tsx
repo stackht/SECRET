@@ -1,8 +1,10 @@
-import { dashboardMetrics, feed, entities, alerts } from "../data/mock";
 import { useEffect, useMemo, useState } from "react";
+import { dashboardMetrics, feed, entities, alerts } from "../data/mock";
 import { Activity, BarChart3, Radar, Shield, Users, Globe, Layers3, ChevronRight, Play, Pin, ArrowUpRight, Waves } from "lucide-react";
 import { HoloList, HudCard, StatRow } from "../components/HudPrimitives";
 import { GlobeScene } from "../components/GlobeScene";
+import { useBackendStore } from "../store/backend";
+import { apiDashboardSummary, type DashboardSummary } from "../services/api";
 
 const activity = [22, 34, 31, 46, 58, 49, 63, 77, 69, 84, 91, 88];
 const entityMix = [
@@ -36,7 +38,23 @@ function Donut() {
 
 export function CommandCenter() {
   const [tick, setTick] = useState(0);
+  const backend = useBackendStore((s) => s.mode);
+  const graph = useBackendStore((s) => s.graph);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 2500); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (backend !== "backend") return;
+    apiDashboardSummary().then(setSummary).catch(() => {});
+  }, [backend]);
+  const live = backend === "backend";
+  const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase();
+  const priorityTargets = useMemo(() => {
+    if (!live) return entities.slice(0, 4);
+    const degree: Record<string, number> = {};
+    for (const e of graph.edges) { degree[e.source] = (degree[e.source] ?? 0) + 1; degree[e.target] = (degree[e.target] ?? 0) + 1; }
+    return graph.nodes.slice().sort((a, b) => (degree[b.id] ?? 0) - (degree[a.id] ?? 0)).slice(0, 4)
+      .map((n) => ({ id: n.id, name: n.name, type: n.type, risk: degree[n.id] ?? 0 }));
+  }, [live, graph]);
   return (
     <div className="page command-center">
       <div className="app-background-globe" aria-hidden="true">
@@ -52,19 +70,29 @@ export function CommandCenter() {
           <div className="subtle">Smart Entity &amp; Criminal Relationship Exploration Tool</div>
         </div>
         <div className="system-meta command-clock">
-          <div>SYSTEM ONLINE</div>
-          <div>27 AUG 2026</div>
+          <div>SYSTEM {live ? "LIVE" : "ONLINE · DEMO DATA"}</div>
+          <div>{today}</div>
           <div>{`21:${String((tick % 60) + 10).padStart(2, "0")}:14`}</div>
         </div>
       </div>
       <div className="hud-grid">
         <section className="hud-col">
           <HudCard label="Global overview" className="hud-hero">
-            <div className="hud-total">1,812,020,001</div>
+            <div className="hud-total">{live && summary ? summary.relationships.toLocaleString() : "1,812,020,001"}</div>
             <div className="hud-sublist">
-              <StatRow label="Events" value="3,705" />
-              <StatRow label="Alerts" value="12%" />
-              <StatRow label="Growth" value="-11%" />
+              {live && summary ? (
+                <>
+                  <StatRow label="Cases" value={String(summary.cases)} />
+                  <StatRow label="Sources" value={String(summary.sources)} />
+                  <StatRow label="Alerts" value={String(summary.alerts)} />
+                </>
+              ) : (
+                <>
+                  <StatRow label="Events" value="3,705" />
+                  <StatRow label="Alerts" value="12%" />
+                  <StatRow label="Growth" value="-11%" />
+                </>
+              )}
             </div>
             <div className="hud-hero-track">
               <span />
@@ -156,12 +184,21 @@ export function CommandCenter() {
           <Sparkline />
         </HudCard>
         <HudCard label="Investigation summary">
-          <HoloList items={[
-            { label: "Active investigations", value: String(dashboardMetrics[0].value) },
-            { label: "Entities monitored", value: dashboardMetrics[1].value.toLocaleString() },
-            { label: "Relationships", value: dashboardMetrics[2].value.toLocaleString() },
-            { label: "High-risk alerts", value: String(dashboardMetrics[3].value) }
-          ]} />
+          {live && summary ? (
+            <HoloList items={[
+              { label: "Active cases", value: String(summary.cases) },
+              { label: "Entities", value: summary.entities.toLocaleString() },
+              { label: "Relationships", value: summary.relationships.toLocaleString() },
+              { label: "Source files", value: String(summary.sources) }
+            ]} />
+          ) : (
+            <HoloList items={[
+              { label: "Active investigations", value: String(dashboardMetrics[0].value) },
+              { label: "Entities monitored", value: dashboardMetrics[1].value.toLocaleString() },
+              { label: "Relationships", value: dashboardMetrics[2].value.toLocaleString() },
+              { label: "High-risk alerts", value: String(dashboardMetrics[3].value) }
+            ]} />
+          )}
         </HudCard>
         <HudCard label="Recent intelligence">
           <div className="mini-list compact-feed">
@@ -181,28 +218,32 @@ export function CommandCenter() {
       <div className="hud-bottom hud-bottom-command hud-bottom-tight">
         <HudCard label="Live entity queue" title="Priority targets">
           <div className="stack">
-            {entities.slice(0, 4).map((entity) => (
+            {priorityTargets.map((entity) => (
               <div key={entity.id} className="entity entity-tight">
                 <div>
                   <div>{entity.name}</div>
                   <div className="meta">{entity.type} · {entity.id}</div>
                 </div>
-                <div className="risk">Risk {entity.risk}</div>
+                <div className="risk">{live ? `${entity.risk} links` : `Risk ${entity.risk}`}</div>
               </div>
             ))}
           </div>
         </HudCard>
         <HudCard label="Alert pulse" title="Incoming signals">
           <div className="stack">
-            {alerts.map((alert) => (
-              <div key={alert.title} className={`alert ${alert.severity.toLowerCase()}`}>
-                <div>
-                  <div className="tag">{alert.severity}</div>
-                  <div>{alert.title}</div>
+            {live ? (
+              <div className="meta">{summary?.alerts ?? 0} persisted indicator alerts. Open Alert Center to review.</div>
+            ) : (
+              alerts.map((alert) => (
+                <div key={alert.title} className={`alert ${alert.severity.toLowerCase()}`}>
+                  <div>
+                    <div className="tag">{alert.severity}</div>
+                    <div>{alert.title}</div>
+                  </div>
+                  <div className="meta">{alert.time}</div>
                 </div>
-                <div className="meta">{alert.time}</div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </HudCard>
       </div>

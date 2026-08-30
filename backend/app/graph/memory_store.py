@@ -27,6 +27,14 @@ class MemoryGraphStore:
         if edge.id in self.edges:
             self.edges[edge.id] = edge
             return
+        for existing in self.edges.values():
+            if (existing.source_id, existing.target_id, existing.type) == (
+                edge.source_id,
+                edge.target_id,
+                edge.type,
+            ):
+                existing.properties = edge.properties
+                return
         store_edge = GraphEdge(
             id=self._new_edge_id(),
             source_id=edge.source_id,

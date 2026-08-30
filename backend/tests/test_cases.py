@@ -80,6 +80,15 @@ def test_update_case(db_client: TestClient, auth: dict, created_case) -> None:
     assert body["priority"] == "CRITICAL"
 
 
+def test_archive_case(db_client: TestClient, auth: dict, created_case) -> None:
+    """DELETE (archive) soft-removes a case by setting status ARCHIVED."""
+    resp = db_client.delete(f"/api/v1/cases/{created_case['case_number']}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "ARCHIVED"
+    assert body["closed_at"] is not None
+
+
 def test_associate_and_list_profiles(db_client: TestClient, auth: dict, created_case, profile) -> None:
     resp = db_client.post(
         f"/api/v1/cases/{created_case['case_number']}/profiles",

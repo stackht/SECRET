@@ -1,31 +1,75 @@
-import { useMemo, useState } from "react";
-import { entities } from "../data/mock";
+import { useEffect, useMemo, useState } from "react";
+import { entities as mockEntities } from "../data/mock";
+import { useBackendStore } from "../store/backend";
+import { apiListCriminals, type CriminalProfile } from "../services/api";
 import { HudPage } from "../components/HudPage";
 import { HudCard } from "../components/HudPrimitives";
 
+type Row = {
+  id: string;
+  type: string;
+  name: string;
+  risk?: number;
+  confidence?: number;
+  links?: number;
+};
+
 export function EntityExplorer() {
+  const backend = useBackendStore((s) => s.mode);
+  const graph = useBackendStore((s) => s.graph);
   const [query, setQuery] = useState("");
-  const filtered = useMemo(() => entities.filter((e) => `${e.name} ${e.type}`.toLowerCase().includes(query.toLowerCase())), [query]);
+  const [profiles, setProfiles] = useState<CriminalProfile[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (backend !== "backend") return;
+    apiListCriminals({ limit: 100 })
+      .then((res) => setProfiles(res.items))
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load entities"));
+  }, [backend]);
+
+  const rows: Row[] = useMemo(() => {
+    if (backend !== "backend") {
+      return mockEntities.map((e) => ({ id: e.id, type: e.type, name: e.name, risk: e.risk, confidence: e.confidence, links: e.relationships }));
+    }
+    const map = new Map<string, Row>();
+    for (const p of profiles) {
+      map.set(p.secret_id, { id: p.secret_id, type: p.profile_type, name: p.name, risk: p.risk_score, confidence: p.confidence });
+    }
+    for (const n of graph.nodes) {
+      const existing = map.get(n.id);
+      map.set(n.id, { id: n.id, type: n.type, name: n.name, risk: typeof existing?.risk === "number" ? existing.risk : undefined, confidence: existing?.confidence ?? undefined, links: graph.edges.filter((e) => e.source === n.id || e.target === n.id).length });
+    }
+    return Array.from(map.values());
+  }, [backend, profiles, graph]);
+
+  const filtered = useMemo(
+    () => rows.filter((e) => `${e.name} ${e.type} ${e.id}`.toLowerCase().includes(query.toLowerCase())),
+    [rows, query],
+  );
+
   return (
-    <HudPage title="ENTITY EXPLORER" subtitle="Search entity, identifier, organization..." rightMeta={<><div>{filtered.length} RESULTS</div></>}>
+    <HudPage title="ENTITY EXPLORER" subtitle={backend === "backend" ? "Live entity registry + graph nodes" : "Synthetic demo registry"} rightMeta={<><div>{filtered.length} RESULTS</div>{backend === "backend" ? <div>LIVE</div> : <div>DEMO</div>}</>}>
       <div className="hud-explorer-layout">
         <HudCard label="Search console" title="Entity Query" className="hud-explorer-search">
           <input className="control hud-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search entity, identifier, organization..." />
-          <div className="hud-search-hints">
-            <span className="glass-strip">Try aliases</span>
-            <span className="glass-strip">Try risk score</span>
-            <span className="glass-strip">Try relationship tags</span>
-          </div>
+          {error ? <div className="meta" style={{ color: "var(--red, #ff5f56)" }}>{error}</div> : null}
         </HudCard>
         <HudCard label="Result matrix" title="Matched Entities" className="hud-explorer-grid">
           <div className="hud-entity-grid">
             {filtered.map((e) => (
-              <div className="hud-card hud-mini-card" key={e.id}>
+              <div className="hud-card hud-mini-card" key={`${e.type}-${e.id}`}>
                 <div className="hud-label">{e.type}</div>
                 <h3>{e.name}</h3>
-                <div className="meta">Risk {e.risk} · Confidence {e.confidence}% · {e.relationships} links</div>
+                <div className="meta">
+                  {e.id}
+                  {typeof e.risk === "number" ? ` · Risk ${e.risk}` : ""}
+                  {typeof e.confidence === "number" ? ` · Confidence ${e.confidence}%` : ""}
+                  {typeof e.links === "number" ? ` · ${e.links} links` : ""}
+                </div>
               </div>
             ))}
+            {!filtered.length && <div className="meta">No entities found. Ingest a source to grow the registry.</div>}
           </div>
         </HudCard>
       </div>

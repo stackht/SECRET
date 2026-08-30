@@ -100,17 +100,68 @@ class IntelligenceAdapter(SourceAdapter):
         )
 
 
+class SocialAdapter(SourceAdapter):
+    source_type = "SOCIAL"
+
+    def ingest(self, raw: dict) -> SourceRecord:
+        return SourceRecord(
+            record_id=str(raw["id"]),
+            source_type=self.source_type,
+            timestamp=raw.get("timestamp", ""),
+            text=raw.get("text", ""),
+            fields=raw,
+        )
+
+
+class CriminalHistoryAdapter(SourceAdapter):
+    source_type = "CRIMINAL_HISTORY"
+
+    def ingest(self, raw: dict) -> SourceRecord:
+        return SourceRecord(
+            record_id=str(raw["id"]),
+            source_type=self.source_type,
+            timestamp=raw.get("timestamp", ""),
+            text=raw.get("text", ""),
+            fields=raw,
+        )
+
+
+class LocationAdapter(SourceAdapter):
+    source_type = "LOCATION"
+
+    def ingest(self, raw: dict) -> SourceRecord:
+        return SourceRecord(
+            record_id=str(raw["id"]),
+            source_type=self.source_type,
+            timestamp=raw.get("timestamp", ""),
+            text=raw.get("text", ""),
+            fields=raw,
+        )
+
+
+class OtherAdapter(SourceAdapter):
+    source_type = "OTHER"
+
+    def ingest(self, raw: dict) -> SourceRecord:
+        return SourceRecord(
+            record_id=str(raw["id"]),
+            source_type=self.source_type,
+            timestamp=raw.get("timestamp", ""),
+            text=raw.get("text", ""),
+            fields=raw,
+        )
+
+
 # Adapter registry keyed by source type.
 ADAPTERS: dict[str, SourceAdapter] = {
     a.source_type: a()
     for a in (FIRAdapter, CDRAdapter, TransactionAdapter, SurveillanceAdapter,
-              VehicleAdapter, IntelligenceAdapter)
+              VehicleAdapter, IntelligenceAdapter, SocialAdapter,
+              CriminalHistoryAdapter, LocationAdapter, OtherAdapter)
 }
 
 
 def normalize_record(source_type: str, raw: dict) -> SourceRecord:
     """Normalize a raw payload for a source into a SourceRecord."""
-    adapter = ADAPTERS.get(source_type)
-    if adapter is None:
-        raise KeyError(f"Unknown source type: {source_type}")
+    adapter = ADAPTERS.get(source_type) or ADAPTERS["OTHER"]
     return adapter.ingest(raw)

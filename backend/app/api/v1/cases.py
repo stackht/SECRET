@@ -127,3 +127,19 @@ async def dissociate_profile(
 ) -> None:
     await CaseService(session).dissociate_profile(case_number_or_id, profile_id)
     await session.commit()
+
+
+@router.delete(
+    "/{case_number_or_id}",
+    response_model=CaseRead,
+    summary="Archive (soft-remove) a case",
+)
+async def archive_case(
+    case_number_or_id: str,
+    session: DbSession,
+    _: RequireAnalyst,
+) -> object:
+    case = await CaseService(session).archive_case(case_number_or_id)
+    await session.commit()
+    await session.refresh(case)
+    return case

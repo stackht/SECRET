@@ -8,17 +8,13 @@
 import { create } from "zustand";
 import {
   apiGetNetwork,
-  apiLogin,
+  getAccessToken,
   setAccessToken,
   type GraphResponse,
 } from "../services/api";
 import { mockGraph } from "../data/graphMock";
 
 export type BackendMode = "checking" | "backend" | "mock";
-
-// Demo credentials; used only to obtain a token for the dev backend.
-const DEMO_USERNAME = "admin";
-const DEMO_PASSWORD = "admin-secret";
 
 interface BackendState {
   mode: BackendMode;
@@ -42,9 +38,11 @@ export const useBackendStore = create<BackendState>((set, get) => ({
 
   connect: async () => {
     set({ mode: "checking", lastError: null });
+    if (!getAccessToken()) {
+      set({ mode: "mock", connected: false, graph: mockGraph, lastError: "Not authenticated" });
+      return "mock";
+    }
     try {
-      const tokens = await apiLogin(DEMO_USERNAME, DEMO_PASSWORD);
-      setAccessToken(tokens.access_token);
       const network = await apiGetNetwork({ limit: 500 });
       set({ graph: network, mode: "backend", connected: true, lastError: null });
       return "backend";

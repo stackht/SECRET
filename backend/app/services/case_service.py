@@ -69,6 +69,15 @@ class CaseService:
             setattr(case, key, value)
         return await self._repo.save(case)
 
+    async def archive_case(self, case_number_or_id: str) -> Case:
+        """Non-destructively archive (soft-remove) a case by setting status ARCHIVED."""
+        case = await self._resolve(case_number_or_id)
+        if case is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+        case.status = "ARCHIVED"
+        case.closed_at = datetime.now()
+        return await self._repo.save(case)
+
     # --- associations ---
 
     async def _get_case_checked(self, key: str) -> Case:

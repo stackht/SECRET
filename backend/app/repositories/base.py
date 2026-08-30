@@ -32,6 +32,11 @@ class BaseRepository(Generic[ModelT]):
         await self._session.flush()
         return instance
 
+    async def delete(self, instance: ModelT) -> None:
+        """Stage an instance for deletion and flush (caller commits)."""
+        await self._session.delete(instance)
+        await self._session.flush()
+
     async def get(self, pk: int) -> Optional[ModelT]:
         return await self._session.get(self._model, pk)
 

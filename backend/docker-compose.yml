@@ -21,7 +21,6 @@ services:
       retries: 10
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
 
   ############################################################
   # Neo4j — derived analytical graph
@@ -81,7 +80,7 @@ services:
       neo4j:
         condition: service_healthy
     command: >
-      sh -c "python run.py --no-migrate --port 8000"
+      sh -c "python run.py --port 8000"
 
 volumes:
   pgdata:

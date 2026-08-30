@@ -83,3 +83,40 @@ def test_materialize_profiles_and_case_links() -> None:
     # Two INVOLVED_IN edges present.
     involved = [e for e in store.edges.values() if e.type == "INVOLVED_IN"]
     assert len(involved) == 2
+
+
+def test_materialize_extracted_entities_and_relationships() -> None:
+    eng = create_async_engine("sqlite+aiosqlite:///:memory:")
+    S = async_sessionmaker(eng, expire_on_commit=False)
+
+    async def scenario() -> MemoryGraphStore:
+        async with eng.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        store = MemoryGraphStore()
+        async with S() as session:
+            case = Case(case_number="CASE-2026-0002", title="Ingested CDR Network",
+                        status=CaseStatus.OPEN.value, priority=CasePriority.HIGH.value)
+            session.add(case)
+            await session.flush()
+            from app.models.entity import Entity, EntityRelationship
+
+            session.add_all([
+                Entity(case_id=case.id, entity_id="N-4821", entity_type="PHONE",
+                       name="Phone", confidence=0.9, source_ids=["CDR-001"]),
+                Entity(case_id=case.id, entity_id="N-9044", entity_type="PHONE",
+                       name="Phone", confidence=0.9, source_ids=["CDR-001"]),
+                EntityRelationship(case_id=case.id, rel_type="CALLED",
+                                   source_id="N-4821", target_id="N-9044",
+                                   confidence=0.85, source_ids=["CDR-001"]),
+            ])
+            await session.commit()
+            await GraphMaterializer(session, store).run()
+        return store
+
+    store = asyncio.run(scenario())
+
+    assert store.nodes["N-4821"].type == "PHONE"
+    assert store.nodes["N-4821"].properties["source_ids"] == ["CDR-001"]
+    calls = [e for e in store.edges.values() if e.type == "CALLED"]
+    assert len(calls) == 1
+    assert calls[0].properties["confidence"] == 0.85

@@ -41,7 +41,9 @@ docker compose up -d api
 ```
 
 - `api` waits for Postgres + Neo4j health checks, then starts the app.
-- The `api` container runs `python run.py --no-migrate --port 8000`.
+- Alembic migrations own the schema: the `api` container runs
+  `python run.py --port 8000`, which applies `alembic upgrade head` (baseline +
+  `0002_add_case_sources`) before serving.
 
 Check services:
 
@@ -62,6 +64,10 @@ API docs: `http://localhost:8000/docs`
 3. Configure env: copy `.env.example` → `.env` (set `JWT_SECRET`).
 4. Migrate: `python -m alembic upgrade head`
 5. Run API: `python run.py`  (or `.\run.bat`, `.\run.bat --check`)
+
+> Pre-seeded DBs (schema created from `sql/schema.sql`, no `alembic_version`
+> row): run `python -m alembic stamp head` once instead of `upgrade head`, so
+> migrations resume from the current state instead of re-creating objects.
 
 ---
 

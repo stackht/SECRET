@@ -9,6 +9,25 @@ from typing import Any
 from app.core.neo4j import neo4j_connection
 from app.graph.types import GraphEdge, GraphNode, GraphSubgraph
 
+# Properties Neo4jStore is allowed to write on nodes/edges. Everything else is
+# intentionally dropped (configuration denies arbitrary property keys).
+_NODE_PROPS = {
+    "aliases", "risk_score", "risk_level", "confidence", "attributes", "source_ids",
+    "status", "priority", "case_number", "latitude", "longitude", "area",
+}
+_EDGE_PROPS = {
+    "confidence", "source_ids", "amount", "role", "first_seen", "last_seen", "strength",
+}
+
+
+def _render_set(prefix: str, properties: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    clauses: list[str] = []
+    params: dict[str, Any] = {}
+    for key, value in properties.items():
+        clauses.append(f"{prefix}.{key} = ${key}")
+        params[key] = value
+    return (", " + ", ".join(clauses)) if clauses else "", params
+
 
 def _record_key(record) -> str:
     """Best-effort node id from a Neo4j record."""
@@ -89,9 +108,6 @@ class Neo4jStore:
         edges: list[GraphEdge] = []
         for row in rows:
             edge = _to_edge(row)
-            if edge and edge.properties.get("source_id") != row.get("a"):
-                # Ensure direction information is usable; keep as-is.
-                pass
             if edge:
                 edges.append(edge)
         return edges
@@ -140,29 +156,16 @@ class Neo4jStore:
         node_types: list[str] | None = None,
         rel_types: list[str] | None = None,
     ) -> GraphSubgraph:
-        params: dict[str, Any] = {"id": entity_id, "depth": depth}
-        rel_filter = ""
+        params: dict[str, Any] = {"id": entity_id}
+        rel_clause = ""
         if rel_types:
             params["rel_types"] = rel_types
-            rel_filter = "|" + "|".join(rel_types)
-        rows = await self._run(
-            f"""
-            MATCH p = (start:Entity {{id: $id}})-[:*0..$depth]->(n)
-            UNWIND nodes(p) AS node
-            RETURN DISTINCT node
-            """,
-            **params,
-        )
-        # Simpler + robust approach: query 1-hop at a time via BFS query below.
-        node_ids = {_record_key(r) for r in rows}
-        nodes: list[GraphNode] = []
-        edges: list[GraphEdge] = []
+            rel_clause = "AND type(r) IN $rel_types"
+        nodes: dict[str, GraphNode] = {}
+        edges: dict[str, GraphEdge] = {}
+        edge_ids: set[str] = set()
         frontier = {entity_id}
         visited: set[str] = set()
-        node_map: dict[str, GraphNode] = {}
-        start = await self.get_entity(entity_id)
-        if start:
-            node_map[start.id] = start
 
         for _ in range(max(1, depth)):
             next_frontier: set[str] = set()
@@ -170,26 +173,36 @@ class Neo4jStore:
                 if current in visited:
                     continue
                 visited.add(current)
-                if current not in node_map:
+                if current not in nodes:
                     node = await self.get_entity(current)
                     if node:
-                        node_map[current] = node
-                rel_rows = await self._run(
-                    "MATCH (n:Entity {id: $id})-[r]-(m) RETURN m, r, n",
-                    id=current,
+                        nodes[current] = node
+                rows = await self._run(
+                    f"""
+                    MATCH (n:Entity {{id: $id}})-[r]-(m)
+                    {rel_clause}
+                    RETURN m AS m, r AS r, n AS n
+                    """,
+                    **params,
                 )
-                for row in rel_rows:
-                    neighbor = _to_node({**row, "type": None})
-                    neighbor_id = _record_key(row.get("m") or row)
+                for row in rows:
                     edge = _to_edge(row)
-                    if neighbor and neighbor_id:
-                        node_map[neighbor_id] = neighbor
+                    if edge is None:
+                        continue
+                    key = f"{edge.source_id}|{edge.target_id}|{edge.type}"
+                    if key not in edge_ids:
+                        edge_ids.add(key)
+                        edges[key] = edge
+                    neighbor_id = _record_key(row.get("m") or row)
+                    if neighbor_id:
                         next_frontier.add(neighbor_id)
-                    if edge:
-                        edges.append(edge)
             frontier = next_frontier
 
-        return GraphSubgraph(nodes=list(node_map.values()), edges=edges)
+        if node_types:
+            node_types = set(node_types)
+            nodes = {nid: n for nid, n in nodes.items() if n.type in node_types}
+
+        return GraphSubgraph(nodes=list(nodes.values()), edges=list(edges.values()))
 
     async def build_network(
         self,
@@ -242,29 +255,30 @@ class Neo4jStore:
 
     async def upsert_node(self, node: GraphNode) -> None:
         label = node.type if node.type else "Entity"
+        props = {k: v for k, v in (node.properties or {}).items() if k in _NODE_PROPS}
+        set_clause, prop_params = _render_set("n", props)
         await self._run(
             f"""
             MERGE (n:{label} {{id: $id}})
-            SET n.name = $name,
-                n.type = $type,
-                n.updated_at = datetime()
+            SET n.name = $name, n.type = $type, n.updated_at = datetime(){set_clause}
             """,
             id=node.id,
             name=node.name,
             type=node.type,
+            **prop_params,
         )
 
     async def upsert_edge(self, edge: GraphEdge) -> None:
-        # Match source/target by id; direction stored on the relationship.
+        props = {k: v for k, v in (edge.properties or {}).items() if k in _EDGE_PROPS}
+        set_clause, prop_params = _render_set("r", props)
         await self._run(
             f"""
             MATCH (a {{id: $source_id}})
             MATCH (b {{id: $target_id}})
             MERGE (a)-[r:{edge.type}]->(b)
-            SET r.confidence = $confidence,
-                r.updated_at = datetime()
+            SET r.updated_at = datetime(){set_clause}
             """,
             source_id=edge.source_id,
             target_id=edge.target_id,
-            confidence=edge.properties.get("confidence", 0.0),
+            **prop_params,
         )

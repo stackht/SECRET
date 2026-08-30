@@ -21,6 +21,7 @@ class Neo4jConnection:
         return AsyncGraphDatabase.driver(
             settings.neo4j_uri,
             auth=(settings.neo4j_user, settings.neo4j_password),
+            connection_timeout=settings.neo4j_connect_timeout,
         )
 
     @property

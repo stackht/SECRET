@@ -15,10 +15,11 @@ import { AlertsPage } from "./pages/AlertsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { LocationsPage } from "./pages/LocationsPage";
+import { CommunicationsPage } from "./pages/Communications";
+import { TransactionsPage } from "./pages/Transactions";
 import { AssistantPage } from "./pages/AssistantPage";
 import { SimulationPage } from "./pages/SimulationPage";
 import { AuditPage } from "./pages/AuditPage";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const pages: Record<Exclude<Section, "login">, React.JSX.Element> = {
@@ -29,8 +30,8 @@ const pages: Record<Exclude<Section, "login">, React.JSX.Element> = {
   entities: <EntityExplorer />,
   timeline: <TimelinePage />,
   locations: <LocationsPage />,
-  transactions: <PlaceholderPage title="TRANSACTION ANALYSIS" subtitle="Mock financial flows, suspicious transfers, and volume charts." />,
-  communications: <PlaceholderPage title="COMMUNICATION ANALYSIS" subtitle="Call and message cluster relationships with temporal patterns." />,
+  transactions: <TransactionsPage />,
+  communications: <CommunicationsPage />,
   alerts: <AlertsPage />,
   reports: <ReportsPage />,
   settings: <SettingsPage />,

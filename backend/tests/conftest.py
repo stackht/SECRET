@@ -36,7 +36,9 @@ def db_client() -> TestClient:
 
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+    from app.api.deps import get_graph_store
     from app.core.database import Base, get_db_session
+    from app.graph.memory_store import MemoryGraphStore
     from app.main import create_app
     from app.services.seed_service import ensure_admin_user
 
@@ -57,7 +59,9 @@ def db_client() -> TestClient:
 
     from app.main import app as _app
 
+    memory_store = MemoryGraphStore()
     _app.dependency_overrides[get_db_session] = override_session
+    _app.dependency_overrides[get_graph_store] = lambda: memory_store
     with TestClient(_app) as test_client:
         yield test_client
     _app.dependency_overrides.clear()
