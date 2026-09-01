@@ -3,6 +3,7 @@ import { HudPage } from "../components/HudPage";
 import { HudCard, HoloList } from "../components/HudPrimitives";
 import { apiCaseLocations, type LocationsResponse } from "../services/api";
 import { useCaseSelection } from "../services/useCaseSelection";
+import { useCaseIntelligence } from "../hooks/useCaseIntelligence";
 
 const EMPTY: LocationsResponse = { locations: [], visits: [] };
 
@@ -34,6 +35,7 @@ export function LocationsPage() {
   const { backend, cases, caseKey, setCaseKey } = useCaseSelection();
   const [data, setData] = useState<LocationsResponse>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const { intel: caseIntel } = useCaseIntelligence(caseKey);
 
   useEffect(() => {
     if (backend !== "backend") {
@@ -68,6 +70,31 @@ export function LocationsPage() {
           {error && <div className="meta" style={{ color: "var(--red, #ff5f56)" }}>{error}</div>}
         </HudCard>
       )}
+
+      {caseIntel && (
+        <div className="hud-location-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <HudCard label="Movement evidence" title="Location-focused signals">
+            <HoloList items={[
+              { label: "Bridge dependence", value: caseIntel.network_dna?.bridge_dependence ?? "—" },
+              { label: "Evidence nodes", value: String(caseIntel.evidence?.length ?? 0) },
+              { label: "Potential links", value: String(caseIntel.potential_links?.length ?? 0) },
+            ]} />
+          </HudCard>
+          <HudCard label="Spatial anomalies" title="Unusual location activity">
+            <div className="stack">
+              {(caseIntel.anomalies ?? []).filter((a) => a.kind === "LOCATION").slice(0, 3).map((a) => (
+                <div key={a.entity_id} className="alert high">
+                  <div><div className="tag">{a.entity_id}</div><div>{a.explanation}</div></div>
+                </div>
+              ))}
+              {!caseIntel.anomalies?.some((a) => a.kind === "LOCATION") && (
+                <div className="meta">No location anomaly signals flagged for this case.</div>
+              )}
+            </div>
+          </HudCard>
+        </div>
+      )}
+
       <div className="hud-location-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
         <HudCard label="Spatial surface" title="Observed Locations" className="hud-location-map">
           <div className="hud-surface-grid hud-surface-grid-alt" />

@@ -9,6 +9,7 @@ from app.models.case import Case, CaseCriminal, CasePriority, CaseStatus
 from app.models.audit import AuditLog
 from app.models.alert import Alert
 from app.models.entity import Entity, EntityRelationship
+from app.models.lead import Lead
 from app.models.source import Source
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     "Alert",
     "Entity",
     "EntityRelationship",
+    "Lead",
     "Source",
 ]

@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { HudPage } from "../components/HudPage";
 import { HudCard, HoloList } from "../components/HudPrimitives";
 import { NetworkGraph } from "../components/NetworkGraph";
+import { PriorityPanel, RecommendationList, PotentialLinksList, TemporalChangesList } from "../components/IntelligenceUi";
 import { useBackendStore } from "../store/backend";
 import { apiCommunities } from "../services/api";
+import { useCaseIntelligence } from "../hooks/useCaseIntelligence";
+import { useCaseSelection } from "../services/useCaseSelection";
 
 /**
  * Network Intelligence.
@@ -36,6 +39,8 @@ export function NetworkIntel() {
   const mode = useBackendStore((s) => s.mode);
   const online = mode === "backend";
   const [clusterCount, setClusterCount] = useState(0);
+  const { caseKey } = useCaseSelection();
+  const { intel: caseIntel } = useCaseIntelligence(caseKey);
 
   // Rank nodes by risk to approximate influencer importance.
   const influencers = useMemo(() => {
@@ -138,6 +143,10 @@ export function NetworkIntel() {
               ))}
             </div>
           </HudCard>
+          {caseIntel && <PriorityPanel title="Priority targets" items={caseIntel.entity_priorities} />}
+          {caseIntel && <TemporalChangesList changes={caseIntel.temporal_changes} />}
+          {caseIntel && <PotentialLinksList links={caseIntel.potential_links} />}
+          {caseIntel && <RecommendationList recs={caseIntel.recommendations} />}
         </div>
       </div>
     </HudPage>

@@ -258,3 +258,27 @@ CREATE TABLE entity_relationships (
 );
 CREATE INDEX idx_entity_relationships_case ON entity_relationships (case_id);
 CREATE INDEX idx_entity_relationships_source ON entity_relationships (source_id);
+
+
+-- Investigative leads (Phase 12) ---------------------------------------------
+CREATE TABLE investigative_leads (
+    id BIGSERIAL PRIMARY KEY,
+    case_id BIGINT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    kind VARCHAR(40) NOT NULL DEFAULT 'POTENTIAL_LINK',
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    priority FLOAT NOT NULL DEFAULT 0,
+    info_gain FLOAT NOT NULL DEFAULT 0,
+    status VARCHAR(24) NOT NULL DEFAULT 'NEW',
+    entity_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    evidence_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    recommended_action TEXT,
+    recommended_source VARCHAR(64),
+    explanation TEXT,
+    notes TEXT,
+    created_by_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_leads_case ON investigative_leads (case_id);
+CREATE INDEX idx_leads_status ON investigative_leads (status);

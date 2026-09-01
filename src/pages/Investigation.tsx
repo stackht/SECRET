@@ -5,6 +5,8 @@ import { useBackendStore } from "../store/backend";
 import { apiListCriminals, apiListCaseEntities, apiListCaseRelationships, apiListCases, type CaseRead, type EntityRead, type CriminalProfile } from "../services/api";
 import { HudPage } from "../components/HudPage";
 import { HudCard, HoloList, StatRow } from "../components/HudPrimitives";
+import { IntelligenceSummary, PriorityPanel, RecommendationList, GapList } from "../components/IntelligenceUi";
+import { useCaseIntelligence } from "../hooks/useCaseIntelligence";
 
 type AnyEntity = { id: string; type: string; name: string; risk?: number; confidence?: number; aliases?: string[]; relationships?: number; sources?: number; lastActivity?: string };
 
@@ -19,6 +21,7 @@ export function Investigation() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { selectedEntity, setSelectedEntity } = useAppStore();
+  const { intel: caseIntel } = useCaseIntelligence(caseKey ?? "");
 
   const reload = useCallback(async (key: string) => {
     setLoading(true);
@@ -158,6 +161,15 @@ export function Investigation() {
             ]} />
           </div>
         </HudCard>
+      )}
+
+      {caseIntel && (
+        <div className="hud-investigation-layout" style={{ marginTop: 18 }}>
+          <IntelligenceSummary intel={caseIntel} />
+          <PriorityPanel title="Priority entities" items={caseIntel.entity_priorities} />
+          <RecommendationList recs={caseIntel.recommendations} />
+          <GapList gaps={caseIntel.evidence_gaps} />
+        </div>
       )}
     </HudPage>
   );

@@ -517,6 +517,172 @@ export async function apiCommunities(): Promise<CommunityResponse> {
   return request<CommunityResponse>("/api/v1/graph/analytics/communities");
 }
 
+// --- Intelligence layer (Phases 14-17) ---------------------------------------
+
+export interface Anomaly {
+  kind: string;
+  entity_id: string;
+  baseline: number;
+  observed: number;
+  deviation: number;
+  score: number;
+  timestamp: string;
+  evidence: string[];
+  explanation: string;
+}
+
+export interface PotentialLink {
+  source: string;
+  target: string;
+  score: number;
+  supporting_signals: string[];
+  contradictory_signals: string[];
+  evidence_ids: string[];
+  confidence: number;
+  explanation: string;
+}
+
+export interface EvidenceGap {
+  subject: string;
+  known_evidence: string[];
+  missing_evidence: string[];
+  importance: number;
+  recommended_source: string;
+  window: string;
+  explanation: string;
+}
+
+export interface NetworkDNA {
+  density: number;
+  centralization: number;
+  community_count: number;
+  clustering: number;
+  bridge_dependence: string;
+  bridge_ratio: number;
+  temporal_volatility: number;
+  communication_activity: string;
+  transaction_anomaly: string;
+  evidence_coverage: number;
+  fragmentation: number;
+}
+
+export interface PriorityScore {
+  subject: string;
+  priority: number;
+  factors: Record<string, number>;
+  explanation: string[];
+}
+
+export interface Recommendation {
+  kind: string;
+  subject: string;
+  priority: number;
+  info_gain: number;
+  reasoning: string[];
+  evidence_ids: string[];
+  entity_ids: string[];
+  recommended_data: string;
+  window: string;
+}
+
+export interface TemporalChange {
+  kind: string;
+  source: string;
+  target: string;
+  window: string;
+  before: number;
+  after: number;
+  score: number;
+  explanation: string;
+}
+
+export interface CaseIntelligence {
+  case_id: number;
+  evidence_fusion: Record<string, unknown>;
+  evidence: unknown[];
+  temporal_changes: TemporalChange[];
+  anomalies: Anomaly[];
+  potential_links: PotentialLink[];
+  evidence_gaps: EvidenceGap[];
+  network_dna: NetworkDNA;
+  entity_priorities: PriorityScore[];
+  relationship_priorities: PriorityScore[];
+  recommendations: Recommendation[];
+}
+
+export interface LeadRead {
+  id: number;
+  case_id: number;
+  kind: string;
+  title: string;
+  description: string | null;
+  priority: number;
+  info_gain: number;
+  status: string;
+  entity_ids: string[];
+  evidence_ids: string[];
+  recommended_action: string | null;
+  recommended_source: string | null;
+  explanation: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SimulationResult {
+  operation: string;
+  subject: string;
+  before_nodes: number;
+  after_nodes: number;
+  before_edges: number;
+  after_edges: number;
+  before_communities: number;
+  after_communities: number;
+  connectivity_change: number;
+  bridge_before: string;
+  bridge_after: string;
+  affected_communities: number;
+  interpretation: string;
+  explanation: string;
+}
+
+export async function apiCaseIntelligence(caseKey: string): Promise<CaseIntelligence> {
+  return request<CaseIntelligence>(`/api/v1/cases/${encodeURIComponent(caseKey)}/intelligence`);
+}
+
+export async function apiCaseHiddenLinks(caseKey: string): Promise<PotentialLink[]> {
+  return request<PotentialLink[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/hidden-links`);
+}
+
+export async function apiCaseNetworkDNA(caseKey: string): Promise<NetworkDNA> {
+  return request<NetworkDNA>(`/api/v1/cases/${encodeURIComponent(caseKey)}/network-dna`);
+}
+
+export async function apiSimulate(caseKey: string, operation: string, subject: string): Promise<SimulationResult> {
+  return request<SimulationResult>(`/api/v1/cases/${encodeURIComponent(caseKey)}/simulate`, {
+    method: "POST",
+    body: JSON.stringify({ operation, subject }),
+  });
+}
+
+export async function apiCaseLeads(caseKey: string): Promise<LeadRead[]> {
+  return request<LeadRead[]>(`/api/v1/cases/${encodeURIComponent(caseKey)}/leads`);
+}
+
+export async function apiCreateLead(caseKey: string, lead: Partial<LeadRead>): Promise<LeadRead> {
+  return request<LeadRead>(`/api/v1/cases/${encodeURIComponent(caseKey)}/leads`, {
+    method: "POST",
+    body: JSON.stringify(lead),
+  });
+}
+
+export async function apiUpdateLead(caseKey: string, leadId: number, patch: Partial<LeadRead>): Promise<LeadRead> {
+  return request<LeadRead>(`/api/v1/cases/${encodeURIComponent(caseKey)}/leads/${leadId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
 // --- Analysis: temporal + location (Phase 9) --------------------------------
 
 export interface TimeWindowResult {

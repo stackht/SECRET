@@ -1,78 +1,38 @@
-import { useState } from "react";
 import { HudPage } from "../components/HudPage";
-import { HudCard, StatRow } from "../components/HudPrimitives";
-import { apiRunSimulation, type SimulationResponse } from "../services/api";
+import { HudCard } from "../components/HudPrimitives";
+import { WhatIfSimulator } from "../components/WhatIfSimulator";
+import { InvestigativeLeadsPanel } from "../components/InvestigativeLeadsPanel";
+import { RecommendationList } from "../components/IntelligenceUi";
+import { useCaseIntelligence } from "../hooks/useCaseIntelligence";
+import { useCaseSelection } from "../services/useCaseSelection";
 
 export function SimulationPage() {
-  const [result, setResult] = useState<SimulationResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { backend, cases, caseKey, setCaseKey } = useCaseSelection();
+  const { intel } = useCaseIntelligence(caseKey);
 
-  const run = async (scenario = "NORMAL_NETWORK") => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiRunSimulation(scenario);
-      setResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Simulation unavailable");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const entityOptions = backend === "backend"
+    ? (intel?.entity_priorities ?? []).map((p) => ({ id: p.subject, label: p.subject }))
+    : (intel?.entity_priorities ?? []).slice(0, 5).map((p) => ({ id: p.subject, label: p.subject }));
 
   return (
     <HudPage
       title="INTELLIGENCE SIMULATION"
-      subtitle="Run the full pipeline over synthetic data"
-      rightMeta={<>{result ? <div>{result.entities} ENTITIES</div> : <div>READY</div>}</>}
+      subtitle="What-if sandbox, investigative leads and next-best-action"
+      rightMeta={<>{intel ? <div>{intel.recommendations?.length ?? 0} ACTIONS</div> : <div>READY</div>}{backend === "backend" ? <div>LIVE</div> : <div>DEMO</div>}</>}
     >
-      <div className="hud-simulation-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div style={{ display: "grid", gap: 16 }}>
-          <HudCard label="Control" title="Run Intelligence Simulation">
-            <p className="meta">Executes: generate → ingest → extract → resolve → graph → analytics → anomalies → insights.</p>
-            <button className="cta" onClick={() => run("NORMAL_NETWORK")} disabled={loading} style={{ marginTop: 12 }}>
-              {loading ? "SIMULATING..." : "RUN INTELLIGENCE SIMULATION"}
-            </button>
-            <button className="pill" onClick={() => run("COMMUNICATION_ANOMALY")} disabled={loading} style={{ marginTop: 8 }}>
-              ANOMALY SCENARIO
-            </button>
-          </HudCard>
-
-          {error ? (
-            <HudCard label="System" title="Unavailable">
-              <div className="meta">{error}</div>
-            </HudCard>
-          ) : null}
-
-          {result ? (
-            <HudCard label="Output" title="Pipeline Summary">
-              <div className="stack">
-                <StatRow label="Records ingested" value={String(result.steps[0]?.count ?? 0)} />
-                <StatRow label="Entities extracted" value={String(result.entities)} />
-                <StatRow label="Nodes written" value={String(result.nodes_written)} />
-                <StatRow label="Elapsed" value={`${result.elapsed_seconds}s`} />
-              </div>
-            </HudCard>
-          ) : null}
-        </div>
-
-        <HudCard label="Pipeline steps" title="Simulation Log">
-          {result ? (
-            <div className="mini-list compact-feed">
-              {result.steps.map((s, i) => (
-                <div key={s.label} className="entity feed-row">
-                  <div>
-                    <div>{s.label}</div>
-                    <div className="meta">step {i + 1} · {s.count} items</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="meta">Run a simulation to populate the pipeline log.</div>
-          )}
+      {backend === "backend" && (
+        <HudCard label="Case" title="Investigation selector">
+          <select className="control hud-search" value={caseKey} onChange={(e) => setCaseKey(e.target.value)}>
+            {cases.map((c) => <option key={c.case_number} value={c.case_number}>{c.case_number} · {c.title}</option>)}
+          </select>
         </HudCard>
+      )}
+      <div className="hud-simulation-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+        <div style={{ display: "grid", gap: 16 }}>
+          <WhatIfSimulator caseKey={caseKey} entityOptions={entityOptions} />
+          <RecommendationList recs={intel?.recommendations ?? []} />
+        </div>
+        <InvestigativeLeadsPanel caseKey={caseKey} recommendations={intel?.recommendations ?? []} />
       </div>
     </HudPage>
   );
