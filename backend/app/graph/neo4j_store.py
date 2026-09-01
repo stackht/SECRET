@@ -9,6 +9,8 @@ from typing import Any
 from app.core.neo4j import neo4j_connection
 from app.graph.types import GraphEdge, GraphNode, GraphSubgraph
 
+import json
+
 # Properties Neo4jStore is allowed to write on nodes/edges. Everything else is
 # intentionally dropped (configuration denies arbitrary property keys).
 _NODE_PROPS = {
@@ -24,9 +26,24 @@ def _render_set(prefix: str, properties: dict[str, Any]) -> tuple[str, dict[str,
     clauses: list[str] = []
     params: dict[str, Any] = {}
     for key, value in properties.items():
+        value = _neo4j_value(value)
+        if value is None:
+            continue
         clauses.append(f"{prefix}.{key} = ${key}")
         params[key] = value
     return (", " + ", ".join(clauses)) if clauses else "", params
+
+
+def _neo4j_value(value: Any) -> Any:
+    """Neo4j allows only primitives / arrays. Flatten or stringify the rest."""
+    if isinstance(value, (int, float, bool, str)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_neo4j_value(v) for v in value]
+    if isinstance(value, dict):
+        # Empty maps are valid; non-empty need flattening or key-dropping.
+        return json.dumps(value)
+    return str(value)
 
 
 def _record_key(record) -> str:

@@ -4,10 +4,35 @@ Coordinates graph queries against a `GraphStore`, converting domain types into
 API schemas. Uses a store injected by FastAPI dependency resolution (Neo4j in
 production, in-memory in tests).
 """
+from typing import Any
+
 from fastapi import HTTPException, status
 
 from app.graph.types import GraphEdge, GraphNode, GraphSubgraph
 from app.schemas.graph import GraphEdgeSchema, GraphNodeSchema, GraphResponse
+
+
+def _jsonable(value: Any) -> Any:
+    """Convert graph property values into JSON-serializable primitives.
+
+    Neo4j returns its own temporal types (DateTime/Date/Time/Duration) that
+    Pydantic cannot serialize; temporal properties are emitted as ISO strings.
+    Lists and nested maps are converted recursively.
+    """
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    try:
+        from neo4j import time as neo4j_time  # installed with the driver
+    except ImportError:  # pragma: no cover
+        neo4j_time = None
+    if neo4j_time is not None:
+        if isinstance(value, (neo4j_time.DateTime, neo4j_time.Date, neo4j_time.Time)):
+            return value.isoformat()
+        if isinstance(value, neo4j_time.Duration):
+            return str(value)
+    return value
 
 
 def _node_to_schema(node: GraphNode) -> GraphNodeSchema:
@@ -15,7 +40,7 @@ def _node_to_schema(node: GraphNode) -> GraphNodeSchema:
         id=node.id,
         type=node.type,
         name=node.name,
-        properties=node.properties,
+        properties={k: _jsonable(v) for k, v in (node.properties or {}).items()},
     )
 
 
@@ -25,7 +50,7 @@ def _edge_to_schema(edge: GraphEdge) -> GraphEdgeSchema:
         source=edge.source_id,
         target=edge.target_id,
         type=edge.type,
-        properties=edge.properties,
+        properties={k: _jsonable(v) for k, v in (edge.properties or {}).items()},
     )
 
 

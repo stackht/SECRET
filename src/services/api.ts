@@ -499,6 +499,24 @@ export async function apiDashboardSummary(): Promise<DashboardSummary> {
   return request<DashboardSummary>("/api/v1/dashboard/summary");
 }
 
+// --- Graph communities (cluster count for Network Intelligence) ---------------
+
+export interface CommunityResult {
+  community_id: number;
+  size: number;
+  entities: string[];
+}
+
+export interface CommunityResponse {
+  communities: CommunityResult[];
+  count: number;
+  network_density: number;
+}
+
+export async function apiCommunities(): Promise<CommunityResponse> {
+  return request<CommunityResponse>("/api/v1/graph/analytics/communities");
+}
+
 // --- Analysis: temporal + location (Phase 9) --------------------------------
 
 export interface TimeWindowResult {

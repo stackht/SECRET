@@ -1,18 +1,41 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HudPage } from "../components/HudPage";
 import { HudCard, HoloList } from "../components/HudPrimitives";
+import { NetworkGraph } from "../components/NetworkGraph";
 import { useBackendStore } from "../store/backend";
+import { apiCommunities } from "../services/api";
 
 /**
- * Network Intelligence (Phase 7).
+ * Network Intelligence.
  *
- * Visually unchanged. The Key Influencers / Hot nodes lists are now derived from
- * the live knowledge-graph (or the synthetic fallback) instead of hard-coded
- * values, so the screen reflects real application state.
+ * The Network Mesh now renders the actual nodes/edges (interactive: zoom, pan,
+ * node selection, connected-node + relationship highlighting, reset/fit). The
+ * "clusters mapped" chip counts real communities: backend Louvain when online,
+ * connected components of the synthetic graph when offline.
  */
+function connectedComponents(count: number, edges: { source: string; target: string }[]): number {
+  if (count === 0) return 0;
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    if (!parent.has(x)) parent.set(x, x);
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a); const rb = find(b);
+    if (ra !== rb) parent.set(rb, ra);
+  };
+  for (const e of edges) { find(e.source); find(e.target); union(e.source, e.target); }
+  const withEdges = new Set(edges.flatMap((e) => [e.source, e.target]));
+  return new Set([...parent.keys()].map(find)).size + Math.max(0, count - withEdges.size);
+}
+
 export function NetworkIntel() {
   const graph = useBackendStore((s) => s.graph);
   const mode = useBackendStore((s) => s.mode);
+  const online = mode === "backend";
+  const [clusterCount, setClusterCount] = useState(0);
 
   // Rank nodes by risk to approximate influencer importance.
   const influencers = useMemo(() => {
@@ -31,7 +54,6 @@ export function NetworkIntel() {
       degree[edge.source] = (degree[edge.source] ?? 0) + 1;
       degree[edge.target] = (degree[edge.target] ?? 0) + 1;
     }
-    const byId = new Map(graph.nodes.map((n) => [n.id, n]));
     const ranked = graph.nodes
       .map((node) => ({ node, degree: degree[node.id] ?? 0 }))
       .filter((x) => x.degree > 0)
@@ -40,7 +62,19 @@ export function NetworkIntel() {
     return ranked;
   }, [graph]);
 
-  const online = mode === "backend";
+  // Community count: real Louvain clusters when online, connected components
+  // of the visible graph when offline. Never node count.
+  useEffect(() => {
+    if (online) {
+      apiCommunities()
+        .then((res) => setClusterCount(Number(res.count) || 0))
+        .catch(() => setClusterCount(connectedComponents(graph.nodes.length, graph.edges)));
+      return;
+    }
+    const ids = new Set(graph.nodes.map((n) => n.id));
+    const edges = graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+    setClusterCount(connectedComponents(ids.size, edges));
+  }, [online, graph]);
 
   return (
     <HudPage
@@ -73,9 +107,11 @@ export function NetworkIntel() {
         </HudCard>
 
         <HudCard label="Graph surface" title="Network Mesh" className="hud-network-mesh">
-          <div className="hud-surface-grid hud-surface-grid-nodes" />
+          <div className="hud-net-graph">
+            <NetworkGraph nodes={graph.nodes} edges={graph.edges} />
+          </div>
           <div className="hud-network-overlay">
-            <div className="glass-strip">{graph.nodes.length} clusters mapped</div>
+            <div className="glass-strip">{clusterCount} clusters mapped</div>
             <div className="glass-strip">{graph.edges.length} active paths</div>
           </div>
         </HudCard>

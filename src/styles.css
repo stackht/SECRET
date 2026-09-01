@@ -271,6 +271,10 @@ background-size:auto, auto, auto, auto, 100% 36px, 36px 100%}
 .hud-network-axis{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
 .hud-network-mesh{min-height:620px;position:relative}
 .hud-network-overlay{position:absolute;left:18px;bottom:16px;right:18px;display:flex;gap:10px;justify-content:space-between}
+.hud-net-graph{position:absolute;left:14px;right:14px;top:8px;bottom:52px}
+.hud-net-surface{position:absolute;inset:0}
+.hud-net-selection{font-size:11px;letter-spacing:.08em;pointer-events:none}
+.hud-net-controls button{pointer-events:auto;font-size:10px;padding:6px 10px}
 .hud-network-side{display:grid;gap:16px}
 .hud-investigation-layout{grid-template-columns:1.05fr .85fr}
 .hud-investigation-list{min-height:620px}
