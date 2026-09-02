@@ -728,17 +728,62 @@ export async function apiRunInvestigation(scenario = "NORMAL_NETWORK"): Promise<
 
 // --- AI Assistant (Phase 11) ------------------------------------------------
 
+export interface KeyFinding {
+  label: string;
+  detail: string;
+}
+
+export interface AssistantEntity {
+  id: string;
+  type: string;
+  name: string;
+  priority: number;
+}
+
+export interface AssistantRelItem {
+  source: string;
+  target: string;
+  kind: string; // CONFIRMED | POTENTIAL
+  confidence: number;
+}
+
+export interface AssistantRecommendation {
+  kind: string;
+  subject: string;
+  priority: number;
+  info_gain: number;
+  reasoning: string[];
+  recommended_data: string;
+  window: string;
+}
+
+export interface IntelligenceResponse {
+  type: string;
+  query: string;
+  summary: string;
+  key_findings: KeyFinding[];
+  entities: AssistantEntity[];
+  relationships: AssistantRelItem[];
+  anomalies: string[];
+  evidence: string[];
+  evidence_gaps: string[];
+  next_best_action: AssistantRecommendation | null;
+  source_ids: string[];
+  found: boolean;
+}
+
 export interface AssistantResponse {
   question: string;
   answer: string;
   source_ids: string[];
   found: boolean;
+  structured?: IntelligenceResponse | null;
 }
 
-export async function apiAskAssistant(question: string): Promise<AssistantResponse> {
+export async function apiAskAssistant(question: string, caseKey?: string): Promise<AssistantResponse> {
   return request<AssistantResponse>("/api/v1/analysis/assistant", {
     method: "POST",
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, case_key: caseKey || null }),
   });
 }
 

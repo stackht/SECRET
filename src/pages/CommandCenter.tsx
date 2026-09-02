@@ -1,60 +1,46 @@
 import { useEffect, useMemo, useState } from "react";
-import { dashboardMetrics, feed, entities, alerts } from "../data/mock";
-import { Activity, BarChart3, Radar, Shield, Users, Globe, Layers3, ChevronRight, Play, Pin, ArrowUpRight, Waves } from "lucide-react";
+import { Shield, ChevronRight, Pin, Waves, ArrowUpRight } from "lucide-react";
 import { HoloList, HudCard, StatRow } from "../components/HudPrimitives";
 import { GlobeScene } from "../components/GlobeScene";
+import {
+  DnaPanel, PriorityPanel, RecommendationList, AnomalyList,
+  PotentialLinksList, GapList, TemporalChangesList, IntelligenceSummary,
+} from "../components/IntelligenceUi";
 import { useBackendStore } from "../store/backend";
 import { apiDashboardSummary, type DashboardSummary } from "../services/api";
+import { useCaseIntelligence } from "../hooks/useCaseIntelligence";
+import { useCaseSelection } from "../services/useCaseSelection";
 
-const activity = [22, 34, 31, 46, 58, 49, 63, 77, 69, 84, 91, 88];
-const entityMix = [
-  { label: "People", value: 42 },
-  { label: "Organizations", value: 24 },
-  { label: "Vehicles", value: 12 },
-  { label: "Phones", value: 9 },
-  { label: "Locations", value: 8 },
-  { label: "Accounts", value: 5 }
-];
-
-function Sparkline() {
-  const d = useMemo(() => activity.map((v, i) => `${i === 0 ? "M" : "L"} ${i * 10} ${100 - v}`).join(" "), []);
-  return (
-    <svg viewBox="0 0 110 110" className="sparkline">
-      <path d={d} />
-      <path d={d} className="sparkline-fill" />
-    </svg>
-  );
-}
-
-function Donut() {
-  return (
-    <svg viewBox="0 0 120 120" className="donut">
-      <circle cx="60" cy="60" r="42" />
-      <circle cx="60" cy="60" r="42" className="donut-ring" />
-      <circle cx="60" cy="60" r="42" className="donut-ring active" />
-    </svg>
-  );
-}
-
+/**
+ * Command Center — executive investigative intelligence view.
+ *
+ * Answers: what cases are active, which entities matter, what changed recently,
+ * what anomalies/potential links exist, what evidence is missing, and what to
+ * investigate next. All values come from the case intelligence engine (live or
+ * deterministic offline) — nothing is hardcoded.
+ */
 export function CommandCenter() {
   const [tick, setTick] = useState(0);
   const backend = useBackendStore((s) => s.mode);
-  const graph = useBackendStore((s) => s.graph);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const { caseKey } = useCaseSelection();
+  const { intel } = useCaseIntelligence(caseKey);
+  const live = backend === "backend";
+
   useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 2500); return () => clearInterval(t); }, []);
   useEffect(() => {
-    if (backend !== "backend") return;
+    if (!live) return;
     apiDashboardSummary().then(setSummary).catch(() => {});
-  }, [backend]);
-  const live = backend === "backend";
+  }, [live]);
+
   const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase();
-  const priorityTargets = useMemo(() => {
-    if (!live) return entities.slice(0, 4);
-    const degree: Record<string, number> = {};
-    for (const e of graph.edges) { degree[e.source] = (degree[e.source] ?? 0) + 1; degree[e.target] = (degree[e.target] ?? 0) + 1; }
-    return graph.nodes.slice().sort((a, b) => (degree[b.id] ?? 0) - (degree[a.id] ?? 0)).slice(0, 4)
-      .map((n) => ({ id: n.id, name: n.name, type: n.type, risk: degree[n.id] ?? 0 }));
-  }, [live, graph]);
+  const caseOverview = summary;
+
+  // Primary insight: strongest recommendation (or fallback to top potential link).
+  const topRec = intel?.recommendations?.[0] ?? null;
+  const topAnomaly = (intel?.anomalies ?? [])[0];
+  const topLink = (intel?.potential_links ?? [])[0];
+
   return (
     <div className="page command-center">
       <div className="app-background-globe" aria-hidden="true">
@@ -62,11 +48,11 @@ export function CommandCenter() {
       </div>
       <div className="command-title-row">
         <div className="command-topline">
-          <span>Project</span>
-          <span className="command-year">2020</span>
+          <span>Intelligence</span>
+          <span className="command-year">OPERATIONS</span>
         </div>
         <div className="command-hero">
-          <div className="brand-lock">DATA VISUALIZATION</div>
+          <div className="brand-lock">INVESTIGATIVE INTELLIGENCE</div>
           <div className="subtle">Smart Entity &amp; Criminal Relationship Exploration Tool</div>
         </div>
         <div className="system-meta command-clock">
@@ -75,178 +61,99 @@ export function CommandCenter() {
           <div>{`21:${String((tick % 60) + 10).padStart(2, "0")}:14`}</div>
         </div>
       </div>
-      <div className="hud-grid">
-        <section className="hud-col">
-          <HudCard label="Global overview" className="hud-hero">
-            <div className="hud-total">{live && summary ? summary.relationships.toLocaleString() : "1,812,020,001"}</div>
-            <div className="hud-sublist">
-              {live && summary ? (
-                <>
-                  <StatRow label="Cases" value={String(summary.cases)} />
-                  <StatRow label="Sources" value={String(summary.sources)} />
-                  <StatRow label="Alerts" value={String(summary.alerts)} />
-                </>
-              ) : (
-                <>
-                  <StatRow label="Events" value="3,705" />
-                  <StatRow label="Alerts" value="12%" />
-                  <StatRow label="Growth" value="-11%" />
-                </>
-              )}
-            </div>
-            <div className="hud-hero-track">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-          </HudCard>
 
-          <HudCard label="Live metrics">
-            <div className="hud-card-head">
-              <h3>Regional Activity</h3>
-              <Donut />
-            </div>
-            <HoloList items={[
-              { label: "CIT", value: "12,020" },
-              { label: "NFC", value: "11,018" },
-              { label: "KUC", value: "4,205" }
-            ]} />
-          </HudCard>
-
-          <HudCard label="Entity ranking" title="Signal Distribution">
-            <HoloList items={[
-              { label: "Orion Meridian", value: "12,020" },
-              { label: "Sector 17", value: "11,016" },
-              { label: "Phone 4821", value: "4,205" },
-              { label: "VX-2048", value: "2,400" }
-            ]} />
-          </HudCard>
-        </section>
-
-        <section className="hud-center">
-          <div className="hud-center-top">
-            <div className="hud-title-bar">DATA STATISTICS PLATFORM</div>
-          </div>
-          <div className="hud-globe-anchors">
-            <div className="glass-strip"><Pin size={12} /> Global mesh locked</div>
-            <div className="glass-strip"><Waves size={12} /> Signal sweep active</div>
-            <div className="glass-strip"><ArrowUpRight size={12} /> 87.4% confidence</div>
-          </div>
-        </section>
-
-        <section className="hud-col">
-          <HudCard label="Advertising trend">
-            <div className="hud-card-head">
-              <h3>Node Share</h3>
-              <Layers3 size={16} color="var(--blue)" />
-            </div>
-            <div className="hud-pie-row">
-              <div className="hud-pie-block">
-                <div className="hud-pie-shape" />
-                <HoloList items={[
-                  { label: "People", value: "35.2%" },
-                  { label: "Vehicles", value: "27.4%" },
-                  { label: "Accounts", value: "10.1%" }
-                ]} />
-              </div>
-            </div>
-          </HudCard>
-
-          <HudCard label="Signal capture">
-            <div className="hud-card-head">
-              <h3>Cluster Resonance</h3>
-              <Radar size={16} color="var(--blue)" />
-            </div>
-            <div className="hud-radar-shell">
-              <div className="hud-radar" />
-            </div>
-            <div className="hud-radar-legend">
-              {entityMix.slice(0, 4).map((item) => <StatRow key={item.label} label={item.label} value={`${item.value}%`} />)}
-            </div>
-          </HudCard>
-
-          <HudCard label="Alert media relay" className="hud-video">
-            <div className="hud-preview">
-              <div className="hud-play"><Play size={18} /></div>
-            </div>
-            <div className="stat-row">
-              <span className="stat-label">Suspicious relay</span>
-              <span className="stat-value">35.2%</span>
-            </div>
-          </HudCard>
-        </section>
-      </div>
-
+      {/* CASE OVERVIEW */}
       <div className="hud-bottom hud-bottom-command">
-        <HudCard label="24 hour trend" title="Signal wave" className="hud-bottom-chart">
-          <Sparkline />
-        </HudCard>
-        <HudCard label="Investigation summary">
-          {live && summary ? (
+        <HudCard label="Case overview" title="Active investigations">
+          {caseOverview ? (
             <HoloList items={[
-              { label: "Active cases", value: String(summary.cases) },
-              { label: "Entities", value: summary.entities.toLocaleString() },
-              { label: "Relationships", value: summary.relationships.toLocaleString() },
-              { label: "Source files", value: String(summary.sources) }
+              { label: "Active cases", value: String(caseOverview.cases) },
+              { label: "Entities", value: caseOverview.entities.toLocaleString() },
+              { label: "Relationships", value: caseOverview.relationships.toLocaleString() },
+              { label: "Source files", value: String(caseOverview.sources) },
+              { label: "Indicator alerts", value: String(caseOverview.alerts) },
             ]} />
           ) : (
-            <HoloList items={[
-              { label: "Active investigations", value: String(dashboardMetrics[0].value) },
-              { label: "Entities monitored", value: dashboardMetrics[1].value.toLocaleString() },
-              { label: "Relationships", value: dashboardMetrics[2].value.toLocaleString() },
-              { label: "High-risk alerts", value: String(dashboardMetrics[3].value) }
-            ]} />
+            <div className="meta">No case selected / offline. Open a case to populate the overview.</div>
           )}
         </HudCard>
-        <HudCard label="Recent intelligence">
+
+        <HudCard label="Recent intelligence" title="What changed">
           <div className="mini-list compact-feed">
-            {feed.map((item, i) => (
-              <div key={item} className="entity feed-row">
+            {intel?.temporal_changes?.slice(0, 4).map((c, i) => (
+              <div key={`${c.kind}-${c.source}-${i}`} className="entity feed-row">
                 <div>
-                  <div>{item}</div>
-                  <div className="meta">14:{32 - i}:{8 - i * 2}</div>
+                  <div><span className="tag">{c.kind}</span> {c.source}{c.target ? ` ↔ ${c.target}` : ""}</div>
+                  <div className="meta">{c.explanation}</div>
                 </div>
                 <ChevronRight size={14} color="var(--muted)" />
               </div>
             ))}
+            {!(intel?.temporal_changes?.length) && <div className="meta">No network changes detected yet.</div>}
           </div>
         </HudCard>
+
+        {topAnomaly ? (
+          <HudCard label="Top signal" title="Most notable anomaly">
+            <div className="alert high">
+              <div>
+                <div className="tag">{topAnomaly.kind} · score {topAnomaly.score}</div>
+                <div>{topAnomaly.explanation}</div>
+              </div>
+            </div>
+          </HudCard>
+        ) : null}
       </div>
 
-      <div className="hud-bottom hud-bottom-command hud-bottom-tight">
-        <HudCard label="Live entity queue" title="Priority targets">
-          <div className="stack">
-            {priorityTargets.map((entity) => (
-              <div key={entity.id} className="entity entity-tight">
-                <div>
-                  <div>{entity.name}</div>
-                  <div className="meta">{entity.type} · {entity.id}</div>
-                </div>
-                <div className="risk">{live ? `${entity.risk} links` : `Risk ${entity.risk}`}</div>
-              </div>
-            ))}
+      <div className="hud-grid">
+        <section className="hud-col" style={{ display: "grid", gap: 18 }}>
+          {intel && <IntelligenceSummary intel={intel} />}
+          {intel && <PriorityPanel title="Investigation priority" items={intel.entity_priorities} />}
+        </section>
+
+        <section className="hud-center">
+          <div className="hud-title-bar">NETWORK OVERVIEW</div>
+          <div className="hud-globe-anchors">
+            <div className="glass-strip"><Pin size={12} /> Communities: {intel?.network_dna?.community_count ?? "—"}</div>
+            <div className="glass-strip"><Waves size={12} /> Bridge: {intel?.network_dna?.bridge_dependence ?? "—"}</div>
+            <div className="glass-strip"><ArrowUpRight size={12} /> Coverage: {intel?.network_dna?.evidence_coverage ?? 0}%</div>
           </div>
-        </HudCard>
-        <HudCard label="Alert pulse" title="Incoming signals">
-          <div className="stack">
-            {live ? (
-              <div className="meta">{summary?.alerts ?? 0} persisted indicator alerts. Open Alert Center to review.</div>
-            ) : (
-              alerts.map((alert) => (
-                <div key={alert.title} className={`alert ${alert.severity.toLowerCase()}`}>
-                  <div>
-                    <div className="tag">{alert.severity}</div>
-                    <div>{alert.title}</div>
-                  </div>
-                  <div className="meta">{alert.time}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </HudCard>
+          {intel && <div style={{ marginTop: 18 }}><DnaPanel dna={intel.network_dna} /></div>}
+        </section>
+
+        <section className="hud-col" style={{ display: "grid", gap: 18 }}>
+          {intel && <AnomalyList anomalies={intel.anomalies} />}
+          {intel && <PotentialLinksList links={intel.potential_links} />}
+          {intel && <GapList gaps={intel.evidence_gaps} />}
+        </section>
       </div>
+
+      {/* NEXT BEST ACTION — prominent */}
+      {topRec && (
+        <div className="hud-bottom hud-bottom-command hud-bottom-tight">
+          <HudCard label="Next best action" title="Recommended investigation">
+            <div className="entity entity-tight" style={{ alignItems: "flex-start" }}>
+              <div>
+                <div><b>{topRec.subject}</b> — {topRec.kind}</div>
+                <div className="meta">Priority {Math.round(topRec.priority)} · Information gain {Math.round(topRec.info_gain)}</div>
+                {topRec.reasoning?.slice(0, 3).map((r, i) => <div key={i} className="meta">• {r}</div>)}
+                {topRec.recommended_data && <div className="meta">Data: {topRec.recommended_data}</div>}
+              </div>
+            </div>
+          </HudCard>
+          {topLink && (
+            <HudCard label="Potential relationship" title="Hidden-link focus">
+              <div className="entity entity-tight">
+                <div>
+                  <div><b>{topLink.source}</b> ↔ <b>{topLink.target}</b></div>
+                  <div className="meta">{topLink.supporting_signals?.slice(0, 2).join(" · ")}</div>
+                </div>
+                <div className="risk">{Math.round(topLink.score)}%</div>
+              </div>
+            </HudCard>
+          )}
+        </div>
+      )}
     </div>
   );
 }

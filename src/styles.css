@@ -105,6 +105,8 @@ filter:blur(8px)}
 .top-nav-title{font:700 18px/1 "Outfit", system-ui, sans-serif;letter-spacing:.2em}
 .top-nav-subtitle{color:var(--muted);font-size:11px;max-width:34ch}
 .top-nav-links{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.top-nav-group{display:flex;gap:8px;align-items:center}
+.top-nav-group-label{font-size:9px;letter-spacing:.16em;color:var(--muted);opacity:.6;margin-right:2px;white-space:nowrap}
 .top-nav-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);color:var(--muted);cursor:pointer;transition:.18s ease;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
 .top-nav-item.active{color:var(--text);border-color:rgba(63,115,255,.42);background:rgba(63,115,255,.10)}
 .top-nav-item:hover{border-color:rgba(57,198,255,.22);color:var(--text)}
